@@ -1,0 +1,63 @@
+using Kart.Product.Application.Common.Interfaces;
+using Kart.Product.Infrastructure.Messaging;
+using Kart.Product.Infrastructure.Persistence;
+using Kart.Product.Infrastructure.ReadModel;
+using Kart.Product.Infrastructure.Security;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using MongoDB.Driver;
+
+namespace Kart.Product.Infrastructure;
+
+public static class DependencyInjection
+{
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
+    {
+        // --- PostgreSQL write side (database-design.md) ---
+        services.AddDbContext<ProductDbContext>(options =>
+            options.UseNpgsql(configuration.GetConnectionString("ProductDatabase")
+                ?? "Host=localhost;Port=5432;Database=kart_product;Username=kart_product_service;Password=changeme"));
+
+        services.AddScoped<IUnitOfWork, EfUnitOfWork>();
+        services.AddScoped<IProductGroupRepository, ProductGroupRepository>();
+        services.AddScoped<IVariantRepository, VariantRepository>();
+        services.AddScoped<IOutboxEventWriter, OutboxEventWriter>();
+
+        // --- MongoDB read side (database-design.md's product_read_model, sharded on category.id) ---
+        services.Configure<MongoOptions>(configuration.GetSection("Mongo"));
+        services.AddSingleton<IMongoDatabase>(sp =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<MongoOptions>>().Value;
+            var client = new MongoClient(options.ConnectionString);
+            return client.GetDatabase(options.Database);
+        });
+        services.AddScoped<IProductReadModelRepository, MongoProductReadModelRepository>();
+
+        // --- Security ---
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentPrincipal, HttpCurrentPrincipal>();
+
+        // --- Message-bus-manifest-driven RabbitMQ topology (contracts/message-bus-manifest.json is
+        // the single source of truth - nothing here is hardcoded) ---
+        services.Configure<RabbitMqOptions>(configuration.GetSection("RabbitMq"));
+        services.AddSingleton(sp =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<RabbitMqOptions>>().Value;
+            var manifestPath = Path.IsPathRooted(options.ManifestPath)
+                ? options.ManifestPath
+                : Path.Combine(AppContext.BaseDirectory, options.ManifestPath);
+            return MessageBusManifestLoader.Load(manifestPath);
+        });
+
+        // Registration order = startup order for IHostedService: declare topology once, then the
+        // publisher, then the two consumers.
+        services.AddHostedService<RabbitMqTopologyStartupHostedService>();
+        services.AddHostedService<OutboxRelayHostedService>();
+        services.AddHostedService<CatalogProjectionConsumerHostedService>();
+        services.AddHostedService<ReviewEventsConsumerHostedService>();
+
+        return services;
+    }
+}
