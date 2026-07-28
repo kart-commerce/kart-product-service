@@ -5,11 +5,14 @@ using Kart.Product.Application;
 using Kart.Product.Application.Common.Exceptions;
 using Kart.Product.Domain.Common.Exceptions;
 using Kart.Product.Infrastructure;
+using Kart.Shared.Configuration;
 using Kart.Shared.ErrorHandling;
 using Kart.Shared.Observability;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.AddKartGlobalConfig();
 
 builder.AddKartObservability("kart-product-service");
 
