@@ -4,7 +4,6 @@ using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Kart.Shared.Messaging;
@@ -22,7 +21,7 @@ namespace Kart.Product.Infrastructure.Messaging;
 /// </summary>
 public sealed class CatalogProjectionConsumerHostedService(
     IServiceScopeFactory scopeFactory,
-    IOptions<RabbitMqOptions> options,
+    IConnectionFactory connectionFactory,
     MessageBusManifest manifest,
     ILogger<CatalogProjectionConsumerHostedService> logger) : BackgroundService
 {
@@ -35,8 +34,7 @@ public sealed class CatalogProjectionConsumerHostedService(
         {
             try
             {
-                var factory = new ConnectionFactory { HostName = options.Value.HostName, Port = options.Value.Port, DispatchConsumersAsync = true };
-                using var connection = factory.CreateConnection();
+                using var connection = connectionFactory.CreateConnection();
                 using var channel = connection.CreateModel();
 
                 RabbitMqTopologyProvisioner.Declare(channel, manifest);

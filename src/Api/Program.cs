@@ -1,4 +1,5 @@
 using FluentValidation.AspNetCore;
+using Kart.Product.Api;
 using Kart.Product.Api.Middleware;
 using Kart.Product.Api.Security;
 using Kart.Product.Application;
@@ -36,6 +37,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+await StartupConnectivityChecks.RunAsync(app);
 
 // The global exception handler is the only place any exception reaching the HTTP boundary is
 // caught and translated - registered first so it wraps everything downstream.

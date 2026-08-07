@@ -48,7 +48,7 @@ public static class DependencyInjection
         services.AddKartRabbitMqConnectionFactory(sp =>
         {
             var options = sp.GetRequiredService<IOptions<RabbitMqOptions>>().Value;
-            return new RabbitMqConnectionSettings(options.HostName, options.Port);
+            return new RabbitMqConnectionSettings(options.HostName, options.Port, options.UserName, options.Password);
         });
         services.AddKartRabbitMqTopologyStartup();
 

@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using Kart.Shared.Messaging;
 
@@ -17,7 +16,7 @@ namespace Kart.Product.Infrastructure.Messaging;
 /// </summary>
 public sealed class OutboxRelayHostedService(
     IServiceScopeFactory scopeFactory,
-    IOptions<RabbitMqOptions> options,
+    IConnectionFactory connectionFactory,
     MessageBusManifest manifest,
     ILogger<OutboxRelayHostedService> logger) : BackgroundService
 {
@@ -31,8 +30,7 @@ public sealed class OutboxRelayHostedService(
         {
             try
             {
-                var factory = new ConnectionFactory { HostName = options.Value.HostName, Port = options.Value.Port, DispatchConsumersAsync = true };
-                using var connection = factory.CreateConnection();
+                using var connection = connectionFactory.CreateConnection();
                 using var channel = connection.CreateModel();
 
                 RabbitMqTopologyProvisioner.Declare(channel, manifest);

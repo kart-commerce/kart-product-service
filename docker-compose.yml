@@ -21,6 +21,12 @@ services:
   rabbitmq:
     image: rabbitmq:3-management
     container_name: kart-product-rabbitmq
+    environment:
+      # Explicit creds, not RabbitMQ's guest/guest default - guest is loopback-only
+      # (RabbitMQ's own default `loopback_users`), which never works from another container on
+      # the same Docker network, only from literal localhost.
+      RABBITMQ_DEFAULT_USER: kart
+      RABBITMQ_DEFAULT_PASS: kart123
     ports:
       - "5673:5672"
       - "15673:15672"
@@ -69,8 +75,7 @@ services:
 
   product-service:
     build:
-      context: ..
-      dockerfile: kart-product-service/Dockerfile
+      context: .
     container_name: kart-product-service
     depends_on:
       postgres:
@@ -84,11 +89,20 @@ services:
       # `source ../kart-devops/ports.env` first to pick it up automatically; the :-8083 fallback
       # is only for running this repo fully standalone, with no kart-devops checkout alongside it.
       - "${PRODUCT_PORT:-8083}:8080"
+    volumes:
+      # AddKartGlobalConfig() throws at boot unless GlobalConfig:Path resolves to a real file -
+      # every actual secret below is already supplied as a plain env var, so this is just an
+      # empty placeholder to satisfy that check (see the file's own header comment).
+      - ./docker-globalconfig.empty.json:/app/globalconfig.json:ro
     environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      GlobalConfig__Path: /app/globalconfig.json
       ConnectionStrings__ProductDatabase: "Host=postgres;Port=5432;Database=kart_product;Username=kart_product_service;Password=changeme"
       Mongo__ConnectionString: "mongodb://mongo-router:27017"
       Mongo__Database: "kart"
       RabbitMq__HostName: "rabbitmq"
+      RabbitMq__UserName: "kart"
+      RabbitMq__Password: "kart123"
       Jwt__Issuer: "kart-identity-service"
       Jwt__Audience: "kart-product-service"
       Jwt__SigningKey: "local-dev-signing-key-change-me-please-32chars-min"

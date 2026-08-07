@@ -29,7 +29,8 @@
   <!-- Message-bus-manifest-driven RabbitMQ topology (mirrors kart-identity-service's proven pattern). -->
   <ItemGroup>
     <PackageReference Include="RabbitMQ.Client" Version="6.8.1" />
-    <ProjectReference Include="..\..\..\kart-shared\src\Kart.Shared.Messaging\Kart.Shared.Messaging.csproj" />
+    <!-- Vendored via packages/ (../../nuget.config), same pattern as kart-admin-service/etc. -->
+    <PackageReference Include="Kart.Shared.Messaging" Version="0.1.0" />
   </ItemGroup>
 
   <ItemGroup>

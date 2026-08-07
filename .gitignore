@@ -71,6 +71,14 @@ artifacts/
 *.nuget.props
 *.nuget.targets
 
+# Exception to the blanket *.nupkg/packages/* ignore above: /packages/ at the repo root vendors
+# the Kart.Shared.* packages (built from kart-shared via `dotnet pack`, see nuget.config) - kart-shared
+# has no published feed yet, so these are committed here instead (same pattern as
+# kart-admin-service/kart-category-service/kart-offer-service/etc., none of which have this
+# blanket NuGet-packages exclusion in the first place).
+!/packages/
+!/packages/*.nupkg
+
 # Coverlet is a free, cross platform Code Coverage Tool
 coverage*.json
 coverage*.xml
