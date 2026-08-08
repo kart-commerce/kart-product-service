@@ -1,4 +1,6 @@
 using Kart.Product.Application.Common.Interfaces;
+using Kart.Product.Application.Common.Options;
+using Kart.Product.Infrastructure.Caching;
 using Kart.Product.Infrastructure.Messaging;
 using Kart.Product.Infrastructure.Persistence;
 using Kart.Product.Infrastructure.ReadModel;
@@ -10,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
+using StackExchange.Redis;
 
 namespace Kart.Product.Infrastructure;
 
@@ -36,6 +39,16 @@ public static class DependencyInjection
             return client.GetDatabase(options.Database);
         });
         services.AddScoped<IProductReadModelRepository, MongoProductReadModelRepository>();
+
+        // --- Redis cache-aside + write-through in front of the read model (design-decisions.md,
+        // "Caching Strategy for Product Reads") - mirrors kart-category-service's/
+        // kart-inventory-service's own ConnectionMultiplexer registration. Connect() only builds
+        // the connection (it retries internally), so registering it here is safe even if Redis is
+        // unreachable at startup. ---
+        services.Configure<ProductCacheOptions>(configuration.GetSection("ProductCache"));
+        services.AddSingleton<IConnectionMultiplexer>(_ =>
+            ConnectionMultiplexer.Connect(configuration.GetConnectionString("Redis") ?? "localhost:6379"));
+        services.AddScoped<IProductCache, RedisProductCache>();
 
         // --- Security ---
         services.AddHttpContextAccessor();

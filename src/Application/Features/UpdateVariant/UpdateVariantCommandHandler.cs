@@ -11,6 +11,7 @@ public sealed class UpdateVariantCommandHandler(
     IVariantRepository variantRepository,
     IProductGroupRepository productGroupRepository,
     IProductReadModelRepository readModelRepository,
+    IProductCache cache,
     IOutboxEventWriter outboxEventWriter,
     IUnitOfWork unitOfWork,
     ICurrentPrincipal currentPrincipal,
@@ -62,6 +63,16 @@ public sealed class UpdateVariantCommandHandler(
 
         outboxEventWriter.Enqueue(variant.Sku, domainEvent, clientId);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // Write-through the new price into the cache synchronously with the Postgres commit
+        // above (design-decisions.md, "Caching Strategy for Product Reads") - closes the
+        // staleness window between this commit and the eventual Outbox -> RabbitMQ -> Mongo
+        // projection catching up (edge-cases.md, "Read-model staleness after a price change,
+        // compounded by the Redis cache"). No-ops if nothing is cached for this SKU yet.
+        if (request.Price is not null)
+        {
+            await cache.UpdatePriceAsync(variant.Sku, variant.Price.Amount, variant.Price.Currency, now, cancellationToken);
+        }
 
         // Best-effort read of the existing projected ratingSummary (owned entirely by the
         // ReviewSubmitted/ReviewUpdated projector, PRD-6) so the response is complete - the write

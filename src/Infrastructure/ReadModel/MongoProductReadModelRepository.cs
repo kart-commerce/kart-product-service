@@ -48,7 +48,18 @@ public sealed class MongoProductReadModelRepository(IMongoDatabase database) : I
             .Set(d => d.Price, new ProductReadModelPriceDocument { Amount = amount, Currency = currency })
             .Set(d => d.LastUpdatedAt, lastUpdatedAt.UtcDateTime);
 
-        await Collection.UpdateOneAsync(d => d.Id == sku, update, cancellationToken: cancellationToken);
+        // Out-of-order ProductPriceChanged delivery guard (edge-cases.md, design-decisions.md's
+        // "Idempotency & Ordering Mechanism for Price-Change Event Consumption"): RabbitMQ gives
+        // no per-key ordering guarantee, so a delayed/redelivered older event must never overwrite
+        // a price a newer event already applied. Only apply this write if the incoming event is
+        // strictly newer than the document's current lastUpdatedAt - an equal timestamp (an
+        // at-least-once redelivery of the exact same event) is also rejected, which makes this
+        // idempotent for free.
+        var filter = Builders<ProductReadModelDocument>.Filter.And(
+            Builders<ProductReadModelDocument>.Filter.Eq(d => d.Id, sku),
+            Builders<ProductReadModelDocument>.Filter.Lt(d => d.LastUpdatedAt, lastUpdatedAt.UtcDateTime));
+
+        await Collection.UpdateOneAsync(filter, update, cancellationToken: cancellationToken);
     }
 
     public async Task UpdateFieldsAsync(string sku, IReadOnlyDictionary<string, object?> fields, DateTimeOffset lastUpdatedAt, CancellationToken cancellationToken)
@@ -95,7 +106,7 @@ public sealed class MongoProductReadModelRepository(IMongoDatabase database) : I
         ProductGroupId = model.ProductGroupId,
         Name = model.Name,
         Description = model.Description,
-        Category = new ProductReadModelCategoryDocument { Id = model.Category.Id, Name = model.Category.Name },
+        Category = new ProductReadModelCategoryDocument { CategoryId = model.Category.Id, Name = model.Category.Name },
         Brand = model.Brand,
         Price = new ProductReadModelPriceDocument { Amount = model.PriceAmount, Currency = model.PriceCurrency },
         Status = model.Status,
@@ -112,7 +123,7 @@ public sealed class MongoProductReadModelRepository(IMongoDatabase database) : I
         ProductGroupId = document.ProductGroupId,
         Name = document.Name,
         Description = document.Description,
-        Category = new ProductReadModelCategory(document.Category.Id, document.Category.Name),
+        Category = new ProductReadModelCategory(document.Category.CategoryId, document.Category.Name),
         Brand = document.Brand,
         PriceAmount = document.Price.Amount,
         PriceCurrency = document.Price.Currency,

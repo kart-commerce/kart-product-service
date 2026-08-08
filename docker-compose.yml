@@ -36,6 +36,20 @@ services:
       timeout: 5s
       retries: 10
 
+  # design-decisions.md "Caching Strategy for Product Reads": Redis cache-aside (general fields)
+  # + write-through (price fields) in front of product_read_model - same image/health-check
+  # convention as kart-cart-service's and kart-wishlist-service's own standalone compose files.
+  redis:
+    image: redis:7-alpine
+    container_name: kart-product-redis
+    ports:
+      - "6390:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   # --- MongoDB sharded cluster (database-design.md: product_read_model sharded on category.id) ---
   # Minimal-but-real topology for local dev/verification: one config-server replset member, two
   # shard replset members (each a single-node replset - valid for dev, not HA), one mongos router.
@@ -80,6 +94,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       mongo-router:
@@ -98,6 +114,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       GlobalConfig__Path: /app/globalconfig.json
       ConnectionStrings__ProductDatabase: "Host=postgres;Port=5432;Database=kart_product;Username=kart_product_service;Password=changeme"
+      ConnectionStrings__Redis: "redis:6379"
       Mongo__ConnectionString: "mongodb://mongo-router:27017"
       Mongo__Database: "kart"
       RabbitMq__HostName: "rabbitmq"

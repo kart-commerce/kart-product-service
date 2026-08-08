@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using RabbitMQ.Client;
+using StackExchange.Redis;
 
 namespace Kart.Product.Api;
 
@@ -39,6 +40,12 @@ public static class StartupConnectivityChecks
         {
             var database = app.Services.GetRequiredService<IMongoDatabase>();
             await database.RunCommandAsync<BsonDocument>(new BsonDocument("ping", 1));
+        });
+
+        await CheckAsync(logger, "Redis", () =>
+        {
+            app.Services.GetRequiredService<IConnectionMultiplexer>();
+            return Task.CompletedTask;
         });
 
         await CheckAsync(logger, "RabbitMQ", () =>
