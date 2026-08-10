@@ -20,7 +20,7 @@ builder.AddKartObservability("kart-product-service");
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
-builder.Services.AddProductAuthentication(builder.Configuration);
+builder.Services.AddProductAuthentication();
 
 builder.Services.AddKartErrorHandling(options => options
     .Map<SkuAlreadyExistsException>(StatusCodes.Status409Conflict, "SKU_ALREADY_EXISTS")
