@@ -13,7 +13,7 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.AddKartGlobalConfig();
+builder.AddKartGlobalConfig("kart-product-service");
 
 builder.AddKartObservability("kart-product-service");
 
