@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using Kart.Shared.Messaging;
+using Kart.Shared.Observability;
 
 namespace Kart.Product.Infrastructure.Messaging;
 
@@ -47,7 +48,7 @@ public sealed class OutboxRelayHostedService(
             }
             catch (Exception exception)
             {
-                logger.LogWarning(exception, "Outbox relay lost its RabbitMQ connection - reconnecting in {Delay}", ReconnectDelay);
+                logger.LogWarning(exception, "Stage {Stage}: outbox relay lost its RabbitMQ connection - reconnecting in {Delay}", "RabbitMqPublishRetryScheduled", ReconnectDelay);
                 await Task.Delay(ReconnectDelay, stoppingToken);
             }
         }
@@ -73,18 +74,37 @@ public sealed class OutboxRelayHostedService(
 
         foreach (var outboxEvent in batch)
         {
+            // Every event type this outbox ever carries (ProductCreated/PriceChanged/Updated/
+            // Discontinued) belongs to this flow - no per-row category filter needed the way
+            // admin-service's mixed-category outbox needs one.
+            using var flowScope = KartFlowContext.Push("ProductCatalogManagementAdmin");
+
+            var exchange = manifest.ExchangeFor(outboxEvent.EventType);
+            var routingKey = manifest.RoutingKeyFor(outboxEvent.EventType);
+
             var properties = channel.CreateBasicProperties();
             properties.Persistent = true;
             properties.MessageId = outboxEvent.Id.ToString();
             properties.ContentType = "application/json";
 
+            using var activity = RabbitMqTraceContext.StartPublishActivityFromStoredTraceParent(exchange, routingKey, outboxEvent.TraceParent, properties);
+
             channel.BasicPublish(
-                exchange: manifest.ExchangeFor(outboxEvent.EventType),
-                routingKey: manifest.RoutingKeyFor(outboxEvent.EventType),
+                exchange: exchange,
+                routingKey: routingKey,
                 basicProperties: properties,
                 body: Encoding.UTF8.GetBytes(outboxEvent.Payload));
 
             outboxEvent.MarkPublished(publishedAt, "system:product-outbox-poller");
+
+            logger.LogInformation(
+                "Stage {Stage}: outbox event {OutboxEventId} ({EventType}) for sku {Sku} published to {Exchange}/{RoutingKey}",
+                "OutboxEventPublished",
+                outboxEvent.Id,
+                outboxEvent.EventType,
+                outboxEvent.Sku,
+                exchange,
+                routingKey);
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);

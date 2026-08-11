@@ -21,6 +21,7 @@ public sealed class ProductOutboxEventConfiguration : IEntityTypeConfiguration<P
         builder.Property(e => e.PublishedAt).HasColumnName("published_at");
         builder.Property(e => e.CreatedBy).HasColumnName("created_by").IsRequired();
         builder.Property(e => e.UpdatedBy).HasColumnName("updated_by").IsRequired();
+        builder.Property(e => e.TraceParent).HasColumnName("trace_parent");
 
         // The Outbox poller's own "find unpublished rows" scan (OutboxRelayHostedService).
         builder.HasIndex(e => e.Id).HasDatabaseName("idx_product_outbox_unpublished").HasFilter("published_at IS NULL");

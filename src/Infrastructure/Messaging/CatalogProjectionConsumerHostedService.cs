@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Kart.Shared.Messaging;
+using Kart.Shared.Observability;
 
 namespace Kart.Product.Infrastructure.Messaging;
 
@@ -67,10 +68,22 @@ public sealed class CatalogProjectionConsumerHostedService(
 
     private async Task OnMessageAsync(IModel channel, QueueDefinition queue, BasicDeliverEventArgs delivery, CancellationToken cancellationToken)
     {
+        // Every event on this queue is one of the four Product Catalog events this flow governs
+        // (ProductCreated/Updated/PriceChanged/Discontinued) - unlike admin-service's mixed-
+        // category outbox, no per-message filtering is needed before tagging the Flow.
+        using var flowScope = KartFlowContext.Push("ProductCatalogManagementAdmin");
+        using var activity = RabbitMqTraceContext.StartConsumeActivity(QueueName, delivery.BasicProperties);
+
         try
         {
             var eventType = ResolveEventType(delivery, manifest);
             var payloadJson = Encoding.UTF8.GetString(delivery.Body.ToArray());
+
+            logger.LogInformation(
+                "Stage {Stage}: {EventType} consumed from {Queue}",
+                "ProductEventConsumed",
+                eventType,
+                QueueName);
 
             using var scope = scopeFactory.CreateScope();
             var sender = scope.ServiceProvider.GetRequiredService<ISender>();

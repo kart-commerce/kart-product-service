@@ -5,6 +5,7 @@ using Kart.Product.Application.Features.CreateProductGroup;
 using Kart.Product.Domain.ProductGroups;
 using Kart.Product.Domain.Variants;
 using Kart.Shared.Domain;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
@@ -24,7 +25,8 @@ public sealed class CreateProductGroupCommandHandlerTests
         _outboxEventWriter.Object,
         _unitOfWork.Object,
         _currentPrincipal.Object,
-        TimeProvider.System);
+        TimeProvider.System,
+        NullLogger<CreateProductGroupCommandHandler>.Instance);
 
     public CreateProductGroupCommandHandlerTests()
     {

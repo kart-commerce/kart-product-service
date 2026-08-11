@@ -37,7 +37,11 @@
   <ItemGroup>
     <PackageReference Include="RabbitMQ.Client" Version="6.8.1" />
     <!-- Vendored via packages/ (../../nuget.config), same pattern as kart-admin-service/etc. -->
-    <PackageReference Include="Kart.Shared.Messaging" Version="0.1.0" />
+    <PackageReference Include="Kart.Shared.Messaging" Version="0.2.0" />
+    <!-- KartFlowContext (Flow-tagging for structured logs) + RabbitMqTraceContext's
+         ActivitySource, needed here in OutboxRelayHostedService/CatalogProjectionConsumerHostedService -
+         Observability itself is still wired once, at the Api composition root (Program.cs). -->
+    <PackageReference Include="Kart.Shared.Observability" Version="0.3.0" />
   </ItemGroup>
 
   <ItemGroup>

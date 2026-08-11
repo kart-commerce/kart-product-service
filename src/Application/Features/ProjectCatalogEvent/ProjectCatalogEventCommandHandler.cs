@@ -72,12 +72,14 @@ public sealed class ProjectCatalogEventCommandHandler(
         };
 
         await readModelRepository.UpsertAsync(readModel, cancellationToken);
+        logger.LogInformation("Stage {Stage}: sku {Sku} upserted into product_read_model", "ReadModelPersisted", evt.Sku);
     }
 
     private async Task ProjectPriceChangedAsync(string payloadJson, CancellationToken cancellationToken)
     {
         var evt = Deserialize<ProductPriceChangedDomainEvent>(payloadJson);
         await readModelRepository.UpdatePriceAsync(evt.Sku, evt.NewPrice.Amount, evt.NewPrice.Currency, evt.OccurredAt, cancellationToken);
+        logger.LogInformation("Stage {Stage}: sku {Sku} price field patched in product_read_model (CacheInvalidated follows via Redis write-through)", "ReadModelPersisted", evt.Sku);
     }
 
     private async Task ProjectUpdatedAsync(string payloadJson, CancellationToken cancellationToken)
@@ -109,6 +111,7 @@ public sealed class ProjectCatalogEventCommandHandler(
         if (fields.Count > 0)
         {
             await readModelRepository.UpdateFieldsAsync(evt.Sku, fields, evt.OccurredAt, cancellationToken);
+            logger.LogInformation("Stage {Stage}: sku {Sku} fields {Fields} patched in product_read_model", "ReadModelPersisted", evt.Sku, fields.Keys);
         }
     }
 
@@ -116,6 +119,7 @@ public sealed class ProjectCatalogEventCommandHandler(
     {
         var evt = Deserialize<ProductDiscontinuedDomainEvent>(payloadJson);
         await readModelRepository.MarkDiscontinuedAsync(evt.Sku, evt.OccurredAt, cancellationToken);
+        logger.LogInformation("Stage {Stage}: sku {Sku} marked discontinued in product_read_model", "ReadModelPersisted", evt.Sku);
     }
 
     private static T Deserialize<T>(string json) =>

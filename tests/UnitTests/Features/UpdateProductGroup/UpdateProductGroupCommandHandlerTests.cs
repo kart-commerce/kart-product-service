@@ -5,6 +5,7 @@ using Kart.Product.Application.Features.UpdateProductGroup;
 using Kart.Product.Domain.Events;
 using Kart.Product.Domain.ProductGroups;
 using Kart.Product.Domain.Variants;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
@@ -26,7 +27,8 @@ public sealed class UpdateProductGroupCommandHandlerTests
         _outboxEventWriter.Object,
         _unitOfWork.Object,
         _currentPrincipal.Object,
-        TimeProvider.System);
+        TimeProvider.System,
+        NullLogger<UpdateProductGroupCommandHandler>.Instance);
 
     public UpdateProductGroupCommandHandlerTests()
     {

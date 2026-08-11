@@ -3,6 +3,7 @@ using Kart.Product.Api.Security;
 using Kart.Product.Application.Features.AddVariant;
 using Kart.Product.Application.Features.CreateProductGroup;
 using Kart.Product.Application.Features.UpdateProductGroup;
+using Kart.Shared.Observability;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,13 +13,16 @@ namespace Kart.Product.Api.Controllers;
 [ApiController]
 [Route("v1/product-groups")]
 [Authorize(Policy = AuthorizationPolicies.AdminOrPartner)]
-public sealed class ProductGroupsController(ISender sender) : ControllerBase
+public sealed class ProductGroupsController(ISender sender, ILogger<ProductGroupsController> logger) : ControllerBase
 {
     /// <summary>PRD-1: creates a Product (parent) and its initial Variant (SKU) together.</summary>
     [HttpPost]
     [ProducesResponseType(typeof(CreateProductGroupResponse), StatusCodes.Status201Created)]
     public async Task<IActionResult> Create([FromBody] CreateProductGroupRequest request, CancellationToken cancellationToken)
     {
+        using var flowScope = KartFlowContext.Push("ProductCatalogManagementAdmin");
+        logger.LogInformation("Stage {Stage}: create product-group received for sku {Sku}", "ProductGroupsControllerReceived", request.Sku);
+
         var command = new CreateProductGroupCommand(
             request.Name,
             request.Description,
@@ -29,6 +33,7 @@ public sealed class ProductGroupsController(ISender sender) : ControllerBase
             (request.Attributes ?? new ProductAttributesRequest(null, null, null)).ToDomain());
 
         var response = await sender.Send(command, cancellationToken);
+        logger.LogInformation("Stage {Stage}: product-group {ProductGroupId} / sku {Sku} created", "AdminProductManagementProcessCompletedSuccessfully", response.ProductGroupId, response.Sku);
         return CreatedAtAction(nameof(ProductsController.Get), "Products", new { sku = response.Sku }, response);
     }
 
@@ -37,8 +42,12 @@ public sealed class ProductGroupsController(ISender sender) : ControllerBase
     [ProducesResponseType(typeof(UpdateProductGroupResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> Update(Guid productGroupId, [FromBody] UpdateProductGroupRequest request, CancellationToken cancellationToken)
     {
+        using var flowScope = KartFlowContext.Push("ProductCatalogManagementAdmin");
+        logger.LogInformation("Stage {Stage}: update product-group {ProductGroupId} received", "ProductGroupsControllerReceived", productGroupId);
+
         var command = new UpdateProductGroupCommand(productGroupId, request.Name, request.Description, request.CategoryId, request.Brand, request.Status);
         var response = await sender.Send(command, cancellationToken);
+        logger.LogInformation("Stage {Stage}: product-group {ProductGroupId} updated", "AdminProductManagementProcessCompletedSuccessfully", productGroupId);
         return Ok(response);
     }
 
@@ -47,6 +56,9 @@ public sealed class ProductGroupsController(ISender sender) : ControllerBase
     [ProducesResponseType(typeof(AddVariantResponse), StatusCodes.Status201Created)]
     public async Task<IActionResult> AddVariant(Guid productGroupId, [FromBody] AddVariantRequest request, CancellationToken cancellationToken)
     {
+        using var flowScope = KartFlowContext.Push("ProductCatalogManagementAdmin");
+        logger.LogInformation("Stage {Stage}: add variant {Sku} to product-group {ProductGroupId} received", "ProductGroupsControllerReceived", request.Sku, productGroupId);
+
         var command = new AddVariantCommand(
             productGroupId,
             request.Sku,
@@ -54,6 +66,7 @@ public sealed class ProductGroupsController(ISender sender) : ControllerBase
             (request.Attributes ?? new ProductAttributesRequest(null, null, null)).ToDomain());
 
         var response = await sender.Send(command, cancellationToken);
+        logger.LogInformation("Stage {Stage}: variant {Sku} added to product-group {ProductGroupId}", "AdminProductManagementProcessCompletedSuccessfully", response.Sku, productGroupId);
         return CreatedAtAction(nameof(ProductsController.Get), "Products", new { sku = response.Sku }, response);
     }
 }
