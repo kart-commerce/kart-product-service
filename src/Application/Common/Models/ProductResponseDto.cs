@@ -14,7 +14,12 @@ public sealed record ProductResponseDto(
     string Status,
     ProductResponseAttributesDto Attributes,
     ProductResponseRatingSummaryDto RatingSummary,
-    DateTimeOffset LastUpdatedAt);
+    DateTimeOffset LastUpdatedAt,
+    // Added so callers that only know a SKU (e.g. kart-admin-service's /admin/products/{sku}
+    // proxy) can resolve the parent Product-group's id before calling this service's own
+    // PATCH /v1/product-groups/{productGroupId:guid} - previously nothing in the public
+    // ProductResponse schema exposed it at all, so that resolution was impossible.
+    Guid ProductGroupId);
 
 public sealed record ProductResponseCategoryDto(string Id, string? Name);
 

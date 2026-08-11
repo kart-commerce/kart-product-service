@@ -106,6 +106,7 @@ public sealed class UpdateVariantCommandHandler(
             variant.Status.ToString(),
             new ProductResponseAttributesDto(variant.Size, variant.Color, variant.ExtendedAttributes),
             ratingSummary,
-            now);
+            now,
+            variant.ProductGroupId);
     }
 }
