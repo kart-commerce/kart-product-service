@@ -175,4 +175,51 @@ public sealed class MongoProjectionRepositoryTests(MongoContainerFixture fixture
         fetched.Description.Should().Be("desc", "only 'name' was named in changedFields");
         fetched.Brand.Should().Be("Acme");
     }
+
+    /// <summary>
+    /// Category &amp; Attribute Management (Admin) flow: CategoryUpdated's bulk projector - unlike
+    /// every other projector above, this one touches every SKU sharing a categoryId, not one SKU.
+    /// </summary>
+    [Fact]
+    public async Task UpdateCategoryNameForCategory_SetsNameOnEverySkuSharingThatCategoryId_NotOthers()
+    {
+        // MongoContainerFixture.CreateDatabase() always points at the same "kart_test" database
+        // shared across every test method in this class (unique-per-test SKUs are how they avoid
+        // colliding on documents) - a bulk update keyed by categoryId needs its own categoryId
+        // never used by any other test here, or it would also catch every other test's default
+        // "cat-1" documents. Confirmed the hard way: this test originally used "cat-1" and got a
+        // matchedCount larger than 2 because of exactly that cross-test pollution.
+        var repository = new MongoProductReadModelRepository(fixture.CreateDatabase());
+        var matching1 = NewReadModel("sku-mongo-cat-bulk-match-1");
+        matching1.Category = new ProductReadModelCategory("cat-bulk-test", null);
+        var matching2 = NewReadModel("sku-mongo-cat-bulk-match-2");
+        matching2.Category = new ProductReadModelCategory("cat-bulk-test", null);
+        var other = NewReadModel("sku-mongo-cat-bulk-other");
+        other.Category = new ProductReadModelCategory("cat-bulk-test-other", null);
+        await repository.UpsertAsync(matching1, CancellationToken.None);
+        await repository.UpsertAsync(matching2, CancellationToken.None);
+        await repository.UpsertAsync(other, CancellationToken.None);
+
+        var matchedCount = await repository.UpdateCategoryNameForCategoryAsync("cat-bulk-test", "Consumer Electronics", DateTimeOffset.UtcNow.AddMinutes(1), CancellationToken.None);
+
+        matchedCount.Should().Be(2);
+        (await repository.GetBySkuAsync("sku-mongo-cat-bulk-match-1", CancellationToken.None))!.Category.Name.Should().Be("Consumer Electronics");
+        (await repository.GetBySkuAsync("sku-mongo-cat-bulk-match-2", CancellationToken.None))!.Category.Name.Should().Be("Consumer Electronics");
+        (await repository.GetBySkuAsync("sku-mongo-cat-bulk-other", CancellationToken.None))!.Category.Name.Should().BeNull("this SKU belongs to a different category");
+    }
+
+    [Fact]
+    public async Task UpdateCategoryNameForCategory_OlderEventArrivingAfterNewer_IsRejected()
+    {
+        var repository = new MongoProductReadModelRepository(fixture.CreateDatabase());
+        var readModel = NewReadModel("sku-mongo-cat-out-of-order");
+        readModel.Category = new ProductReadModelCategory("cat-ooo-test", null);
+        await repository.UpsertAsync(readModel, CancellationToken.None);
+
+        await repository.UpdateCategoryNameForCategoryAsync("cat-ooo-test", "Newer Name", readModel.LastUpdatedAt.AddMinutes(5), CancellationToken.None);
+        await repository.UpdateCategoryNameForCategoryAsync("cat-ooo-test", "Stale Name", readModel.LastUpdatedAt.AddMinutes(1), CancellationToken.None);
+
+        var fetched = await repository.GetBySkuAsync("sku-mongo-cat-out-of-order", CancellationToken.None);
+        fetched!.Category.Name.Should().Be("Newer Name", "a stale CategoryUpdated must never overwrite a name a newer event already applied");
+    }
 }

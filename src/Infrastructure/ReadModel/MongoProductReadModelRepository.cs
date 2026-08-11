@@ -92,6 +92,23 @@ public sealed class MongoProductReadModelRepository(IMongoDatabase database) : I
         await Collection.UpdateOneAsync(d => d.Id == sku, update, cancellationToken: cancellationToken);
     }
 
+    public async Task<long> UpdateCategoryNameForCategoryAsync(string categoryId, string categoryName, DateTimeOffset lastUpdatedAt, CancellationToken cancellationToken)
+    {
+        var update = Builders<ProductReadModelDocument>.Update
+            .Set("category.name", categoryName)
+            .Set(d => d.LastUpdatedAt, lastUpdatedAt.UtcDateTime);
+
+        // Same out-of-order guard as UpdatePriceAsync (design-decisions.md's "Idempotency &
+        // Ordering Mechanism") - a delayed/redelivered older CategoryUpdated must never overwrite
+        // a name a newer event already applied to a given document.
+        var filter = Builders<ProductReadModelDocument>.Filter.And(
+            Builders<ProductReadModelDocument>.Filter.Eq("category.id", categoryId),
+            Builders<ProductReadModelDocument>.Filter.Lt(d => d.LastUpdatedAt, lastUpdatedAt.UtcDateTime));
+
+        var result = await Collection.UpdateManyAsync(filter, update, cancellationToken: cancellationToken);
+        return result.ModifiedCount;
+    }
+
     private static BsonValue ToBsonValue(object? value) => value switch
     {
         null => BsonNull.Value,

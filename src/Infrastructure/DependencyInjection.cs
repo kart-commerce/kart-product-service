@@ -66,10 +66,11 @@ public static class DependencyInjection
         services.AddKartRabbitMqTopologyStartup();
 
         // Registration order = startup order for IHostedService: declare topology once, then the
-        // publisher, then the two consumers.
+        // publisher, then the three consumers.
         services.AddHostedService<OutboxRelayHostedService>();
         services.AddHostedService<CatalogProjectionConsumerHostedService>();
         services.AddHostedService<ReviewEventsConsumerHostedService>();
+        services.AddHostedService<CategoryEventsConsumerHostedService>();
 
         return services;
     }
