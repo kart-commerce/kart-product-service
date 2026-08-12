@@ -1,22 +1,26 @@
 using FluentValidation.AspNetCore;
+using Kart.Product.Api;
 using Kart.Product.Api.Middleware;
 using Kart.Product.Api.Security;
 using Kart.Product.Application;
 using Kart.Product.Application.Common.Exceptions;
 using Kart.Product.Domain.Common.Exceptions;
 using Kart.Product.Infrastructure;
+using Kart.Shared.Configuration;
 using Kart.Shared.ErrorHandling;
 using Kart.Shared.Observability;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.AddKartGlobalConfig("kart-product-service");
+
 builder.AddKartObservability("kart-product-service");
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
-builder.Services.AddProductAuthentication(builder.Configuration);
+builder.Services.AddProductAuthentication();
 
 builder.Services.AddKartErrorHandling(options => options
     .Map<SkuAlreadyExistsException>(StatusCodes.Status409Conflict, "SKU_ALREADY_EXISTS")
@@ -33,6 +37,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+await StartupConnectivityChecks.RunAsync(app);
 
 // The global exception handler is the only place any exception reaching the HTTP boundary is
 // caught and translated - registered first so it wraps everything downstream.

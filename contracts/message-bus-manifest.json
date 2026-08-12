@@ -5,7 +5,8 @@
     { "name": "product.dlx", "type": "topic", "durable": true }
   ],
   "externalExchanges": [
-    { "name": "review.exchange", "type": "topic", "durable": true }
+    { "name": "review.exchange", "type": "topic", "durable": true },
+    { "name": "category.exchange", "type": "topic", "durable": true }
   ],
   "publishedEvents": [
     { "eventType": "ProductCreated", "exchange": "product.exchange", "routingKey": "product.product.created" },
@@ -54,11 +55,31 @@
           { "name": "product.catalog-projection.retry.120s", "ttlMs": 120000 }
         ]
       }
+    },
+    {
+      "name": "product.category-projection.queue",
+      "durable": true,
+      "bindings": [
+        { "exchange": "category.exchange", "routingKey": "category.category.updated" }
+      ],
+      "deadLetter": {
+        "exchange": "product.dlx",
+        "routingKey": "product.category-projection.dlq"
+      },
+      "retryLadder": {
+        "requeueTo": "product.category-projection.queue",
+        "tiers": [
+          { "name": "product.category-projection.retry.30s", "ttlMs": 30000 },
+          { "name": "product.category-projection.retry.60s", "ttlMs": 60000 },
+          { "name": "product.category-projection.retry.120s", "ttlMs": 120000 }
+        ]
+      }
     }
   ],
   "deadLetterQueues": [
     { "name": "product.review-events.dlq", "exchange": "product.dlx", "routingKey": "product.review-events.dlq" },
-    { "name": "product.catalog-projection.dlq", "exchange": "product.dlx", "routingKey": "product.catalog-projection.dlq" }
+    { "name": "product.catalog-projection.dlq", "exchange": "product.dlx", "routingKey": "product.catalog-projection.dlq" },
+    { "name": "product.category-projection.dlq", "exchange": "product.dlx", "routingKey": "product.category-projection.dlq" }
   ],
   "_comment": "Reconciled to the mature nested manifest shape kart-identity-service/kart-inventory-service/kart-category-service already use (exchanges[]/externalExchanges[]/publishedEvents[]/queues[with deadLetter+retryLadder]/deadLetterQueues[]), superseding this file's earlier flatter shape (exchange/dlx/queues/dlqs/retry as siblings). Two queues: 'product.review-events.queue' consumes review.exchange's ReviewSubmitted/ReviewUpdated (ratingSummary-only projection, ticket PRD-6, 2x retry per event-contract.md) — one queue/DLQ for both routing keys since both are the same consumer group (this service), matching kart-inventory-service's own 'inventory.order-events.queue' precedent of bundling multiple related external routing keys under one queue/DLQ. 'product.catalog-projection.queue' is this service's own self-consumption of the four events it publishes onto product.exchange, so the write-side (PostgreSQL) to read-side (MongoDB product_read_model) sync flows through the same manifest-driven topology/retry-ladder/DLQ machinery as any other consumer, instead of a bespoke in-process sync path. Search/Recommendation/Wishlist/Offer/Analytics each bind their own separate per-consumer-group queue to product.exchange — not shown here, since a manifest only ever declares the exchanges/queues this service itself owns and directly interacts with (see kart-category-service/contracts/message-bus-manifest.json's identical convention)."
 }

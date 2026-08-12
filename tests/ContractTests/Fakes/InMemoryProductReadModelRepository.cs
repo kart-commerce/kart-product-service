@@ -60,5 +60,21 @@ public sealed class InMemoryProductReadModelRepository : IProductReadModelReposi
         return Task.CompletedTask;
     }
 
+    public Task<long> UpdateCategoryNameForCategoryAsync(string categoryId, string categoryName, DateTimeOffset lastUpdatedAt, CancellationToken cancellationToken)
+    {
+        long matched = 0;
+        foreach (var existing in _store.Values)
+        {
+            if (existing.Category.Id == categoryId && existing.LastUpdatedAt < lastUpdatedAt)
+            {
+                existing.Category = existing.Category with { Name = categoryName };
+                existing.LastUpdatedAt = lastUpdatedAt;
+                matched++;
+            }
+        }
+
+        return Task.FromResult(matched);
+    }
+
     public void Seed(ProductReadModel readModel) => _store[readModel.Sku] = readModel;
 }

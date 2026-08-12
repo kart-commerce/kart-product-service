@@ -4,6 +4,7 @@ using Kart.Product.Application.Common.Interfaces;
 using Kart.Product.Application.Features.UpdateVariant;
 using Kart.Product.Domain.ProductGroups;
 using Kart.Product.Domain.Variants;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
@@ -16,6 +17,7 @@ public sealed class UpdateVariantCommandHandlerTests
     private readonly Mock<IVariantRepository> _variantRepository = new();
     private readonly Mock<IProductGroupRepository> _productGroupRepository = new();
     private readonly Mock<IProductReadModelRepository> _readModelRepository = new();
+    private readonly Mock<IProductCache> _cache = new();
     private readonly Mock<IOutboxEventWriter> _outboxEventWriter = new();
     private readonly Mock<IUnitOfWork> _unitOfWork = new();
     private readonly Mock<ICurrentPrincipal> _currentPrincipal = new();
@@ -24,10 +26,12 @@ public sealed class UpdateVariantCommandHandlerTests
         _variantRepository.Object,
         _productGroupRepository.Object,
         _readModelRepository.Object,
+        _cache.Object,
         _outboxEventWriter.Object,
         _unitOfWork.Object,
         _currentPrincipal.Object,
-        TimeProvider.System);
+        TimeProvider.System,
+        NullLogger<UpdateVariantCommandHandler>.Instance);
 
     public UpdateVariantCommandHandlerTests()
     {
@@ -71,6 +75,7 @@ public sealed class UpdateVariantCommandHandlerTests
         variant.Price.Amount.Should().Be(19.99m);
         _outboxEventWriter.Verify(w => w.Enqueue("sku-1", It.IsAny<Kart.Product.Domain.Events.ProductPriceChangedDomainEvent>(), "admin-1"), Times.Once);
         _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _cache.Verify(c => c.UpdatePriceAsync("sku-1", 19.99m, "USD", It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -86,6 +91,8 @@ public sealed class UpdateVariantCommandHandlerTests
 
         response.Status.Should().Be("Discontinued");
         _outboxEventWriter.Verify(w => w.Enqueue("sku-1", It.IsAny<Kart.Product.Domain.Events.ProductDiscontinuedDomainEvent>(), "admin-1"), Times.Once);
+        _cache.Verify(c => c.UpdatePriceAsync(It.IsAny<string>(), It.IsAny<decimal>(), It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()), Times.Never,
+            "the write-through cache path is price-only (design-decisions.md) - a status change must never touch it");
     }
 
     [Fact]

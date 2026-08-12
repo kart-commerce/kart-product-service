@@ -60,6 +60,10 @@ namespace Kart.Product.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("sku");
 
+                    b.Property<string>("TraceParent")
+                        .HasColumnType("text")
+                        .HasColumnName("trace_parent");
+
                     b.Property<string>("UpdatedBy")
                         .IsRequired()
                         .HasColumnType("text")

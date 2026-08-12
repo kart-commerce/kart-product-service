@@ -4,6 +4,7 @@ using Kart.Product.Domain.Events;
 using Kart.Product.Domain.ProductGroups;
 using Kart.Product.Domain.Variants;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace Kart.Product.Application.Features.CreateProductGroup;
 
@@ -13,7 +14,8 @@ public sealed class CreateProductGroupCommandHandler(
     IOutboxEventWriter outboxEventWriter,
     IUnitOfWork unitOfWork,
     ICurrentPrincipal currentPrincipal,
-    TimeProvider timeProvider) : IRequestHandler<CreateProductGroupCommand, CreateProductGroupResponse>
+    TimeProvider timeProvider,
+    ILogger<CreateProductGroupCommandHandler> logger) : IRequestHandler<CreateProductGroupCommand, CreateProductGroupResponse>
 {
     public async Task<CreateProductGroupResponse> Handle(CreateProductGroupCommand request, CancellationToken cancellationToken)
     {
@@ -52,6 +54,16 @@ public sealed class CreateProductGroupCommandHandler(
         outboxEventWriter.Enqueue(variant.Sku, domainEvent, clientId);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Stage {Stage}: product-group {ProductGroupId} and variant {Sku} persisted to product_groups/variants",
+            "ProductPersistedToDatabase",
+            productGroup.Id,
+            variant.Sku);
+        logger.LogInformation(
+            "Stage {Stage}: ProductCreated outbox event saved for sku {Sku}",
+            "ProductOutboxEventSaved",
+            variant.Sku);
 
         return new CreateProductGroupResponse(productGroup.Id, variant.Sku);
     }

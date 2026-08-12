@@ -1,0 +1,3 @@
+{
+  "_comment": "AddKartGlobalConfig() refuses to boot unless GlobalConfig:Path resolves to a real file - this standalone docker-compose.yml already supplies every actual secret (ConnectionStrings__ProductDatabase, Jwt__SigningKey, etc.) as plain `environment:` values instead, so this file only needs to exist, not contain anything. Not a secret - safe to commit."
+}
