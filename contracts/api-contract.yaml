@@ -360,6 +360,13 @@ components:
         attributes: { $ref: '#/components/schemas/ProductAttributes' }
         ratingSummary: { $ref: '#/components/schemas/RatingSummary' }
         lastUpdatedAt: { type: string, format: date-time }
+        productGroupId:
+          type: string
+          format: uuid
+          description: >-
+            The parent Product-group's id. Added so a caller that only knows a SKU (e.g.
+            kart-admin-service's /admin/products/{sku} proxy) can resolve it before calling
+            PATCH /v1/product-groups/{productGroupId}.
 
     Problem:
       type: object

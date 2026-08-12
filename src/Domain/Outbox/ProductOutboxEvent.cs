@@ -32,12 +32,23 @@ public sealed class ProductOutboxEvent
 
     public string UpdatedBy { get; private set; } = "system:product-outbox-poller";
 
+    /// <summary>
+    /// The W3C <c>traceparent</c> of whatever request/activity caused this row to be written
+    /// (captured from <c>Activity.Current</c> at INSERT time, while it's still the real inbound
+    /// request's activity). The Outbox relay is a background poller running seconds later on its
+    /// own, unrelated async context — without persisting this here, the trace this row's eventual
+    /// publish belongs to would be un-recoverable, and a TraceId search in Grafana would show a
+    /// gap between "row written" and "event published". Nullable because a row written outside
+    /// any traced context (a migration/backfill script) legitimately has none.
+    /// </summary>
+    public string? TraceParent { get; private set; }
+
     /// <summary>EF Core materialization constructor.</summary>
     private ProductOutboxEvent()
     {
     }
 
-    public static ProductOutboxEvent Create(string eventType, string sku, string payload, DateTimeOffset occurredAt, string createdBy) =>
+    public static ProductOutboxEvent Create(string eventType, string sku, string payload, DateTimeOffset occurredAt, string createdBy, string? traceParent = null) =>
         new()
         {
             EventType = eventType,
@@ -45,6 +56,7 @@ public sealed class ProductOutboxEvent
             Payload = payload,
             OccurredAt = occurredAt,
             CreatedBy = createdBy,
+            TraceParent = traceParent,
         };
 
     /// <summary>Throws if already published - the poller only ever selects unpublished rows, so a

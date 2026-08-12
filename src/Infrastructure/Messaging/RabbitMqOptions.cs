@@ -10,5 +10,11 @@ public sealed class RabbitMqOptions
     /// Testcontainers maps the broker to a randomized host port.</summary>
     public int Port { get; set; } = 5672;
 
+    /// <summary>Left unset to fall back to RabbitMQ.Client's own guest/guest default
+    /// (loopback-only brokers) - mirrors kart-admin-service's RabbitMqOptions.</summary>
+    public string? UserName { get; set; }
+
+    public string? Password { get; set; }
+
     public string ManifestPath { get; set; } = "message-bus-manifest.json";
 }

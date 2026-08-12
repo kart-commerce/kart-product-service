@@ -2,6 +2,8 @@ using FluentAssertions;
 using Kart.Product.Application.Common.Models;
 using Kart.Product.Infrastructure.ReadModel;
 using Kart.Product.IntegrationTests.Fixtures;
+using MongoDB.Bson;
+using MongoDB.Driver;
 using Xunit;
 
 namespace Kart.Product.IntegrationTests;
@@ -65,6 +67,42 @@ public sealed class MongoProjectionRepositoryTests(MongoContainerFixture fixture
     }
 
     [Fact]
+    public async Task UpdatePrice_OlderEventArrivingAfterNewer_IsRejected()
+    {
+        // edge-cases.md "Out-of-order ProductPriceChanged delivery under concurrent price edits":
+        // RabbitMQ gives no per-key ordering guarantee, so a delayed/redelivered older event must
+        // never overwrite a price a newer event already applied.
+        var repository = new MongoProductReadModelRepository(fixture.CreateDatabase());
+        var readModel = NewReadModel("sku-mongo-out-of-order");
+        var newerOccurredAt = readModel.LastUpdatedAt.AddMinutes(5);
+        await repository.UpsertAsync(readModel, CancellationToken.None);
+
+        await repository.UpdatePriceAsync("sku-mongo-out-of-order", 99.99m, "USD", newerOccurredAt, CancellationToken.None);
+        // The older/delayed event arrives second - must be rejected, not silently re-applied.
+        await repository.UpdatePriceAsync("sku-mongo-out-of-order", 1.00m, "USD", readModel.LastUpdatedAt.AddMinutes(1), CancellationToken.None);
+
+        var fetched = await repository.GetBySkuAsync("sku-mongo-out-of-order", CancellationToken.None);
+        fetched!.PriceAmount.Should().Be(99.99m, "a stale ProductPriceChanged must never overwrite a price a newer event already applied");
+    }
+
+    [Fact]
+    public async Task UpdatePrice_ExactDuplicateRedelivery_IsANoOp()
+    {
+        // At-least-once delivery (requirement-spec §3) means the exact same event can be
+        // redelivered after it already succeeded - re-applying it must be idempotent.
+        var repository = new MongoProductReadModelRepository(fixture.CreateDatabase());
+        var readModel = NewReadModel("sku-mongo-redelivered");
+        var occurredAt = readModel.LastUpdatedAt.AddMinutes(1);
+        await repository.UpsertAsync(readModel, CancellationToken.None);
+
+        await repository.UpdatePriceAsync("sku-mongo-redelivered", 39.99m, "USD", occurredAt, CancellationToken.None);
+        await repository.UpdatePriceAsync("sku-mongo-redelivered", 39.99m, "USD", occurredAt, CancellationToken.None);
+
+        var fetched = await repository.GetBySkuAsync("sku-mongo-redelivered", CancellationToken.None);
+        fetched!.PriceAmount.Should().Be(39.99m);
+    }
+
+    [Fact]
     public async Task UpdateRatingSummary_NeverTouchesPriceOrStatus()
     {
         var repository = new MongoProductReadModelRepository(fixture.CreateDatabase());
@@ -95,6 +133,34 @@ public sealed class MongoProjectionRepositoryTests(MongoContainerFixture fixture
     }
 
     [Fact]
+    public async Task UpsertAsync_StoresCategoryIdAsTheDocumentedRawElementName_NotAsMongosAutoId()
+    {
+        // Regression test for a real bug found during live verification: the MongoDB C# driver's
+        // default auto-mapping conventions treat any member literally named "Id" as that class's
+        // own BSON identifier and silently force its serialized element name to "_id",
+        // overriding an explicit [BsonElement("id")] attribute - a convention meant for document
+        // roots, not nested/embedded sub-documents like ProductReadModelCategoryDocument. Every
+        // other test here only round-trips through this same serializer (write then read back),
+        // which stays internally consistent either way and never catches this - only inspecting
+        // the RAW stored BSON surfaces it. database-design.md's documented schema (matching the
+        // BRD's own worked example at §6.2) is a flat `category: { id, name }`, not `category:
+        // { _id, name }`.
+        var repository = new MongoProductReadModelRepository(fixture.CreateDatabase());
+        var readModel = NewReadModel("sku-mongo-category-raw-shape");
+
+        await repository.UpsertAsync(readModel, CancellationToken.None);
+
+        var rawCollection = fixture.CreateDatabase().GetCollection<BsonDocument>("product_read_model");
+        var raw = await rawCollection.Find(Builders<BsonDocument>.Filter.Eq("_id", "sku-mongo-category-raw-shape")).FirstOrDefaultAsync();
+
+        raw.Should().NotBeNull();
+        var category = raw!["category"].AsBsonDocument;
+        category.Contains("id").Should().BeTrue("database-design.md documents a flat `category: { id, name }` shape");
+        category.Contains("_id").Should().BeFalse("a nested sub-document has no BSON identifier of its own - this would mean the id-detection convention hijacked it again");
+        category["id"].AsString.Should().Be("cat-1");
+    }
+
+    [Fact]
     public async Task UpdateFields_SetsOnlyTheNamedFields()
     {
         var repository = new MongoProductReadModelRepository(fixture.CreateDatabase());
@@ -108,5 +174,52 @@ public sealed class MongoProjectionRepositoryTests(MongoContainerFixture fixture
         fetched!.Name.Should().Be("New Name");
         fetched.Description.Should().Be("desc", "only 'name' was named in changedFields");
         fetched.Brand.Should().Be("Acme");
+    }
+
+    /// <summary>
+    /// Category &amp; Attribute Management (Admin) flow: CategoryUpdated's bulk projector - unlike
+    /// every other projector above, this one touches every SKU sharing a categoryId, not one SKU.
+    /// </summary>
+    [Fact]
+    public async Task UpdateCategoryNameForCategory_SetsNameOnEverySkuSharingThatCategoryId_NotOthers()
+    {
+        // MongoContainerFixture.CreateDatabase() always points at the same "kart_test" database
+        // shared across every test method in this class (unique-per-test SKUs are how they avoid
+        // colliding on documents) - a bulk update keyed by categoryId needs its own categoryId
+        // never used by any other test here, or it would also catch every other test's default
+        // "cat-1" documents. Confirmed the hard way: this test originally used "cat-1" and got a
+        // matchedCount larger than 2 because of exactly that cross-test pollution.
+        var repository = new MongoProductReadModelRepository(fixture.CreateDatabase());
+        var matching1 = NewReadModel("sku-mongo-cat-bulk-match-1");
+        matching1.Category = new ProductReadModelCategory("cat-bulk-test", null);
+        var matching2 = NewReadModel("sku-mongo-cat-bulk-match-2");
+        matching2.Category = new ProductReadModelCategory("cat-bulk-test", null);
+        var other = NewReadModel("sku-mongo-cat-bulk-other");
+        other.Category = new ProductReadModelCategory("cat-bulk-test-other", null);
+        await repository.UpsertAsync(matching1, CancellationToken.None);
+        await repository.UpsertAsync(matching2, CancellationToken.None);
+        await repository.UpsertAsync(other, CancellationToken.None);
+
+        var matchedCount = await repository.UpdateCategoryNameForCategoryAsync("cat-bulk-test", "Consumer Electronics", DateTimeOffset.UtcNow.AddMinutes(1), CancellationToken.None);
+
+        matchedCount.Should().Be(2);
+        (await repository.GetBySkuAsync("sku-mongo-cat-bulk-match-1", CancellationToken.None))!.Category.Name.Should().Be("Consumer Electronics");
+        (await repository.GetBySkuAsync("sku-mongo-cat-bulk-match-2", CancellationToken.None))!.Category.Name.Should().Be("Consumer Electronics");
+        (await repository.GetBySkuAsync("sku-mongo-cat-bulk-other", CancellationToken.None))!.Category.Name.Should().BeNull("this SKU belongs to a different category");
+    }
+
+    [Fact]
+    public async Task UpdateCategoryNameForCategory_OlderEventArrivingAfterNewer_IsRejected()
+    {
+        var repository = new MongoProductReadModelRepository(fixture.CreateDatabase());
+        var readModel = NewReadModel("sku-mongo-cat-out-of-order");
+        readModel.Category = new ProductReadModelCategory("cat-ooo-test", null);
+        await repository.UpsertAsync(readModel, CancellationToken.None);
+
+        await repository.UpdateCategoryNameForCategoryAsync("cat-ooo-test", "Newer Name", readModel.LastUpdatedAt.AddMinutes(5), CancellationToken.None);
+        await repository.UpdateCategoryNameForCategoryAsync("cat-ooo-test", "Stale Name", readModel.LastUpdatedAt.AddMinutes(1), CancellationToken.None);
+
+        var fetched = await repository.GetBySkuAsync("sku-mongo-cat-out-of-order", CancellationToken.None);
+        fetched!.Category.Name.Should().Be("Newer Name", "a stale CategoryUpdated must never overwrite a name a newer event already applied");
     }
 }

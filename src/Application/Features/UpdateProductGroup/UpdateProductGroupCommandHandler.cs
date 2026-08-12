@@ -3,6 +3,7 @@ using Kart.Product.Application.Common.Interfaces;
 using Kart.Product.Domain.Events;
 using Kart.Product.Domain.Variants;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace Kart.Product.Application.Features.UpdateProductGroup;
 
@@ -12,7 +13,8 @@ public sealed class UpdateProductGroupCommandHandler(
     IOutboxEventWriter outboxEventWriter,
     IUnitOfWork unitOfWork,
     ICurrentPrincipal currentPrincipal,
-    TimeProvider timeProvider) : IRequestHandler<UpdateProductGroupCommand, UpdateProductGroupResponse>
+    TimeProvider timeProvider,
+    ILogger<UpdateProductGroupCommandHandler> logger) : IRequestHandler<UpdateProductGroupCommand, UpdateProductGroupResponse>
 {
     public async Task<UpdateProductGroupResponse> Handle(UpdateProductGroupCommand request, CancellationToken cancellationToken)
     {
@@ -72,6 +74,22 @@ public sealed class UpdateProductGroupCommandHandler(
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Stage {Stage}: product-group {ProductGroupId} persisted ({Operation}), {AffectedSkuCount} sibling variant(s) affected",
+            "ProductPersistedToDatabase",
+            productGroup.Id,
+            hasArchive ? "archive" : "field-edit",
+            affectedSkus.Count);
+
+        if (affectedSkus.Count > 0)
+        {
+            logger.LogInformation(
+                "Stage {Stage}: {EventType} outbox event(s) saved for sku(s) {Skus}",
+                "ProductOutboxEventSaved",
+                hasArchive ? "ProductDiscontinued" : "ProductUpdated",
+                affectedSkus);
+        }
 
         return new UpdateProductGroupResponse(productGroup.Id, affectedSkus);
     }

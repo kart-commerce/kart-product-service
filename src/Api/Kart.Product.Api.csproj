@@ -19,15 +19,9 @@
   <ItemGroup>
     <ProjectReference Include="..\Application\Kart.Product.Application.csproj" />
     <ProjectReference Include="..\Infrastructure\Kart.Product.Infrastructure.csproj" />
-    <!--
-      Kart.Shared.ErrorHandling / Kart.Shared.Observability (kart-conventions.md): the single
-      platform-wide global-exception-handler + Serilog/OTel wiring, referenced for real here
-      instead of the local-hand-rolled-copy interim pattern every other existing Kart service
-      still uses (none of them reference kart-shared yet). No published NuGet feed exists, so
-      this is a ProjectReference, per kart-shared's own README.
-    -->
-    <ProjectReference Include="..\..\..\kart-shared\src\Kart.Shared.ErrorHandling\Kart.Shared.ErrorHandling.csproj" />
-    <ProjectReference Include="..\..\..\kart-shared\src\Kart.Shared.Observability\Kart.Shared.Observability.csproj" />
+    <PackageReference Include="Kart.Shared.ErrorHandling" Version="0.1.0" />
+    <PackageReference Include="Kart.Shared.Observability" Version="0.3.0" />
+    <PackageReference Include="Kart.Shared.Configuration" Version="0.2.0" />
   </ItemGroup>
 
   <!--

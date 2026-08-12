@@ -9,12 +9,12 @@
   <!--
     Kart.Shared.Domain (kart-conventions.md) supplies AggregateRoot (Guid-keyed, fits
     ProductGroup) and IDomainEvent - the "one platform-wide implementation, not built locally
-    by each service" pattern. No published NuGet feed exists yet, so this is a ProjectReference
-    (kart-shared's own README documents this as the interim consumption path). Variant is keyed
-    by its own string Sku (not a Guid), so it does not use AggregateRoot - see Variants/Variant.cs.
+    by each service" pattern. Vendored via packages/ (../../nuget.config), same pattern as
+    kart-admin-service/kart-category-service/kart-offer-service/etc. Variant is keyed by its own
+    string Sku (not a Guid), so it does not use AggregateRoot - see Variants/Variant.cs.
   -->
   <ItemGroup>
-    <ProjectReference Include="..\..\..\kart-shared\src\Kart.Shared.Domain\Kart.Shared.Domain.csproj" />
+    <PackageReference Include="Kart.Shared.Domain" Version="0.1.0" />
   </ItemGroup>
 
 </Project>

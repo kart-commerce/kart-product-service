@@ -57,8 +57,19 @@ public sealed class ProductReadModelDocument
 
 public sealed class ProductReadModelCategoryDocument
 {
+    // Deliberately NOT named "Id" - the MongoDB C# driver's default auto-mapping conventions
+    // treat any member literally named "Id"/"id"/"_id" as this class's own BSON identifier and
+    // silently force its serialized element name to "_id", overriding the explicit
+    // [BsonElement("id")] attribute below (this convention exists for document ROOTS, which need
+    // an `_id`; it doesn't know this is a nested/embedded sub-document with no such need). Left
+    // unnoticed, every real document was actually stored/read as `category._id`, not the
+    // documented `category.id` (database-design.md, BRD §6.2's own worked example) - every
+    // existing test only round-tripped through this same serializer without ever inspecting the
+    // raw stored JSON, so it never surfaced. Renaming the C# member (while keeping the explicit
+    // attribute) sidesteps the convention, since it keys off the member name, not the
+    // [BsonElement] value.
     [BsonElement("id")]
-    public string Id { get; set; } = string.Empty;
+    public string CategoryId { get; set; } = string.Empty;
 
     [BsonElement("name")]
     [BsonIgnoreIfNull]

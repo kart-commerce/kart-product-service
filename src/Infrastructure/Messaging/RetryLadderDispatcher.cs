@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using Kart.Shared.Messaging;
 
 namespace Kart.Product.Infrastructure.Messaging;
 
@@ -46,7 +47,10 @@ public static class RetryLadderDispatcher
         channel.BasicAck(delivery.DeliveryTag, multiple: false);
 
         var retryCount = GetRetryCount(delivery.BasicProperties);
-        var tiers = queue.RetryLadder.Tiers;
+        // This dispatcher is only ever invoked for consumer queues, which always configure both a
+        // retry ladder and a dead-letter target in this service's manifest (unlike the shared
+        // package's MessageBusManifest, which models both as optional for services that don't).
+        var tiers = queue.RetryLadder!.Tiers;
 
         var properties = channel.CreateBasicProperties();
         properties.Persistent = true;
@@ -65,7 +69,7 @@ public static class RetryLadderDispatcher
         }
         else
         {
-            channel.BasicPublish(exchange: queue.DeadLetter.Exchange, routingKey: queue.DeadLetter.RoutingKey, basicProperties: properties, body: delivery.Body.ToArray());
+            channel.BasicPublish(exchange: queue.DeadLetter!.Exchange, routingKey: queue.DeadLetter.RoutingKey, basicProperties: properties, body: delivery.Body.ToArray());
             logger.LogError(exception, "Exhausted retry ladder for {Queue} - routed to dead-letter queue via {Exchange}/{RoutingKey}", queue.Name, queue.DeadLetter.Exchange, queue.DeadLetter.RoutingKey);
         }
     }

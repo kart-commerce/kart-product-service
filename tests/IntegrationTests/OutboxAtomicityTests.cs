@@ -6,6 +6,7 @@ using Kart.Product.Infrastructure.Persistence;
 using Kart.Product.IntegrationTests.Fakes;
 using Kart.Product.IntegrationTests.Fixtures;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Kart.Product.IntegrationTests;
@@ -28,7 +29,8 @@ public sealed class OutboxAtomicityTests(PostgresContainerFixture fixture)
             new OutboxEventWriter(dbContext),
             new EfUnitOfWork(dbContext),
             new FixedCurrentPrincipal("admin-1"),
-            TimeProvider.System);
+            TimeProvider.System,
+            NullLogger<CreateProductGroupCommandHandler>.Instance);
 
         var command = new CreateProductGroupCommand("Mouse", "desc", "cat-1", "Acme", sku, new Money(24.99m, "USD"), ProductAttributes.Empty);
         var response = await handler.Handle(command, CancellationToken.None);
@@ -57,7 +59,8 @@ public sealed class OutboxAtomicityTests(PostgresContainerFixture fixture)
                 new OutboxEventWriter(dbContext),
                 new EfUnitOfWork(dbContext),
                 new FixedCurrentPrincipal("admin-1"),
-                TimeProvider.System);
+                TimeProvider.System,
+                NullLogger<CreateProductGroupCommandHandler>.Instance);
 
             await handler.Handle(new CreateProductGroupCommand("Mouse", null, "cat-1", null, sku, new Money(1m, "USD"), ProductAttributes.Empty), CancellationToken.None);
         }
@@ -70,7 +73,8 @@ public sealed class OutboxAtomicityTests(PostgresContainerFixture fixture)
                 new OutboxEventWriter(dbContext),
                 new EfUnitOfWork(dbContext),
                 new FixedCurrentPrincipal("admin-1"),
-                TimeProvider.System);
+                TimeProvider.System,
+                NullLogger<CreateProductGroupCommandHandler>.Instance);
 
             var act = () => handler.Handle(new CreateProductGroupCommand("Mouse 2", null, "cat-1", null, sku, new Money(2m, "USD"), ProductAttributes.Empty), CancellationToken.None);
             await act.Should().ThrowAsync<Kart.Product.Application.Common.Exceptions.SkuAlreadyExistsException>();

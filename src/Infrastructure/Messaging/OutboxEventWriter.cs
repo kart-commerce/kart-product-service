@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Kart.Product.Application.Common.Interfaces;
 using Kart.Product.Domain.Outbox;
@@ -18,7 +19,14 @@ public sealed class OutboxEventWriter(ProductDbContext dbContext) : IOutboxEvent
         var eventType = EventTypeName(domainEvent);
         var payload = JsonSerializer.Serialize(domainEvent, domainEvent.GetType(), JsonOptions);
 
-        var outboxEvent = ProductOutboxEvent.Create(eventType, sku, payload, domainEvent.OccurredAt, createdBy);
+        // Activity.Current here is still the inbound HTTP request's own Activity (ASP.NET Core's
+        // auto-instrumentation started it, and Enqueue always runs synchronously within that
+        // request) - captured now because by the time OutboxRelayHostedService's background
+        // poller picks this row up, seconds later, on its own unrelated async context,
+        // Activity.Current there has nothing to do with this request anymore.
+        var traceParent = Activity.Current?.Id;
+
+        var outboxEvent = ProductOutboxEvent.Create(eventType, sku, payload, domainEvent.OccurredAt, createdBy, traceParent);
         dbContext.OutboxEvents.Add(outboxEvent);
     }
 

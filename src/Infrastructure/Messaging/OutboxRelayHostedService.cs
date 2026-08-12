@@ -4,8 +4,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
+using Kart.Shared.Messaging;
+using Kart.Shared.Observability;
 
 namespace Kart.Product.Infrastructure.Messaging;
 
@@ -16,7 +17,7 @@ namespace Kart.Product.Infrastructure.Messaging;
 /// </summary>
 public sealed class OutboxRelayHostedService(
     IServiceScopeFactory scopeFactory,
-    IOptions<RabbitMqOptions> options,
+    IConnectionFactory connectionFactory,
     MessageBusManifest manifest,
     ILogger<OutboxRelayHostedService> logger) : BackgroundService
 {
@@ -30,8 +31,7 @@ public sealed class OutboxRelayHostedService(
         {
             try
             {
-                var factory = new ConnectionFactory { HostName = options.Value.HostName, Port = options.Value.Port, DispatchConsumersAsync = true };
-                using var connection = factory.CreateConnection();
+                using var connection = connectionFactory.CreateConnection();
                 using var channel = connection.CreateModel();
 
                 RabbitMqTopologyProvisioner.Declare(channel, manifest);
@@ -48,7 +48,7 @@ public sealed class OutboxRelayHostedService(
             }
             catch (Exception exception)
             {
-                logger.LogWarning(exception, "Outbox relay lost its RabbitMQ connection - reconnecting in {Delay}", ReconnectDelay);
+                logger.LogWarning(exception, "Stage {Stage}: outbox relay lost its RabbitMQ connection - reconnecting in {Delay}", "RabbitMqPublishRetryScheduled", ReconnectDelay);
                 await Task.Delay(ReconnectDelay, stoppingToken);
             }
         }
@@ -74,18 +74,37 @@ public sealed class OutboxRelayHostedService(
 
         foreach (var outboxEvent in batch)
         {
+            // Every event type this outbox ever carries (ProductCreated/PriceChanged/Updated/
+            // Discontinued) belongs to this flow - no per-row category filter needed the way
+            // admin-service's mixed-category outbox needs one.
+            using var flowScope = KartFlowContext.Push("ProductCatalogManagementAdmin");
+
+            var exchange = manifest.ExchangeFor(outboxEvent.EventType);
+            var routingKey = manifest.RoutingKeyFor(outboxEvent.EventType);
+
             var properties = channel.CreateBasicProperties();
             properties.Persistent = true;
             properties.MessageId = outboxEvent.Id.ToString();
             properties.ContentType = "application/json";
 
+            using var activity = RabbitMqTraceContext.StartPublishActivityFromStoredTraceParent(exchange, routingKey, outboxEvent.TraceParent, properties);
+
             channel.BasicPublish(
-                exchange: manifest.ExchangeFor(outboxEvent.EventType),
-                routingKey: manifest.RoutingKeyFor(outboxEvent.EventType),
+                exchange: exchange,
+                routingKey: routingKey,
                 basicProperties: properties,
                 body: Encoding.UTF8.GetBytes(outboxEvent.Payload));
 
             outboxEvent.MarkPublished(publishedAt, "system:product-outbox-poller");
+
+            logger.LogInformation(
+                "Stage {Stage}: outbox event {OutboxEventId} ({EventType}) for sku {Sku} published to {Exchange}/{RoutingKey}",
+                "OutboxEventPublished",
+                outboxEvent.Id,
+                outboxEvent.EventType,
+                outboxEvent.Sku,
+                exchange,
+                routingKey);
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);

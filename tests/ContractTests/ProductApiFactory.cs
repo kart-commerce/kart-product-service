@@ -27,8 +27,16 @@ public sealed class ProductApiFactory : WebApplicationFactory<Program>
 
     public InMemoryProductReadModelRepository ReadModelRepository { get; } = new();
 
+    public InMemoryProductCache Cache { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        // Program.cs's StartupConnectivityChecks.RunAsync no-ops only under "Testing" - without
+        // this, it runs the real Postgres/Mongo/RabbitMQ connectivity checks against the
+        // in-memory fakes registered below and throws before the host ever starts (every
+        // request in this factory would then fail with "No service for type ProductDbContext").
+        builder.UseEnvironment("Testing");
+
         builder.ConfigureServices(services =>
         {
             // None of the hosted services Infrastructure registers (RabbitMQ topology/outbox
@@ -48,6 +56,10 @@ public sealed class ProductApiFactory : WebApplicationFactory<Program>
 
             services.RemoveAll(typeof(IProductReadModelRepository));
             services.AddSingleton<IProductReadModelRepository>(ReadModelRepository);
+
+            services.RemoveAll(typeof(StackExchange.Redis.IConnectionMultiplexer));
+            services.RemoveAll(typeof(IProductCache));
+            services.AddSingleton<IProductCache>(Cache);
 
             services.RemoveAll(typeof(IUnitOfWork));
             services.AddScoped<IUnitOfWork, NoOpUnitOfWork>();
