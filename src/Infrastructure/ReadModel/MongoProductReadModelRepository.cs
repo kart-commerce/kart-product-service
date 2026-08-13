@@ -24,6 +24,12 @@ public sealed class MongoProductReadModelRepository(IMongoDatabase database) : I
         return document is null ? null : ToApplicationModel(document);
     }
 
+    public async Task<IReadOnlyList<ProductReadModel>> ListByProductGroupIdAsync(Guid productGroupId, CancellationToken cancellationToken)
+    {
+        var documents = await Collection.Find(d => d.ProductGroupId == productGroupId).ToListAsync(cancellationToken);
+        return documents.Select(ToApplicationModel).ToList();
+    }
+
     public async Task UpsertAsync(ProductReadModel readModel, CancellationToken cancellationToken)
     {
         var document = ToDocument(readModel);

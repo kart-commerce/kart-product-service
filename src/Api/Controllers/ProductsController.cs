@@ -21,7 +21,12 @@ public sealed class ProductsController(ISender sender, ILogger<ProductsControlle
     [ProducesResponseType(typeof(ProductResponseDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> Get(string sku, CancellationToken cancellationToken)
     {
+        using var flowScope = KartFlowContext.Push("NormalShoppingPurchaseJourney");
+        logger.LogInformation("Stage {Stage}: product detail requested for {Sku}", "ProductDetailRequestReceived", sku);
+
         var response = await sender.Send(new GetProductQuery(sku), cancellationToken);
+
+        logger.LogInformation("Stage {Stage}: product detail returned for {Sku}", "ProductDetailReturned", sku);
         return Ok(response);
     }
 
