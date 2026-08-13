@@ -31,6 +31,9 @@ public sealed class ProductReadModelDocument
     [BsonIgnoreIfNull]
     public string? Brand { get; set; }
 
+    [BsonElement("imageUrl")]
+    public string ImageUrl { get; set; } = string.Empty;
+
     [BsonElement("price")]
     public ProductReadModelPriceDocument Price { get; set; } = new();
 

@@ -40,7 +40,8 @@ public sealed class AddVariantCommandHandler(
             variant.Price,
             variant.Status.ToString(),
             variant.Attributes,
-            now);
+            now,
+            productGroup.ImageUrl);
 
         outboxEventWriter.Enqueue(variant.Sku, domainEvent, clientId);
 

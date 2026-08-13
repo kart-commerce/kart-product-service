@@ -13,4 +13,5 @@ public sealed record UpdateProductGroupCommand(
     string? Description,
     string? CategoryId,
     string? Brand,
-    string? Status) : IRequest<UpdateProductGroupResponse>;
+    string? Status,
+    string? ImageUrl = null) : IRequest<UpdateProductGroupResponse>;

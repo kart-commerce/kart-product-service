@@ -60,7 +60,8 @@ public sealed class UpdateVariantCommandHandler(
                 productGroup.Brand,
                 variant.Status.ToString(),
                 variant.Attributes,
-                now);
+                now,
+                productGroup.ImageUrl);
         }
 
         outboxEventWriter.Enqueue(variant.Sku, domainEvent, clientId);
@@ -107,6 +108,7 @@ public sealed class UpdateVariantCommandHandler(
             new ProductResponseAttributesDto(variant.Size, variant.Color, variant.ExtendedAttributes),
             ratingSummary,
             now,
-            variant.ProductGroupId);
+            variant.ProductGroupId,
+            productGroup.ImageUrl);
     }
 }

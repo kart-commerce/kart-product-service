@@ -8,4 +8,5 @@ public sealed record CreateProductGroupRequest(
     string? Brand,
     string Sku,
     MoneyRequest Price,
-    ProductAttributesRequest? Attributes);
+    ProductAttributesRequest? Attributes,
+    string? ImageUrl = null);

@@ -19,6 +19,10 @@ public sealed class ProductGroup : AggregateRoot
 
     public string? Brand { get; private set; }
 
+    /// <summary>Every product must have a real photo (BRD "no product without a real image") -
+    /// required at creation, unlike Description/Brand.</summary>
+    public string ImageUrl { get; private set; } = string.Empty;
+
     public ProductGroupStatus Status { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
@@ -45,19 +49,23 @@ public sealed class ProductGroup : AggregateRoot
         string categoryId,
         string? brand,
         string createdBy,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        string? imageUrl = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(categoryId);
         ArgumentException.ThrowIfNullOrWhiteSpace(createdBy);
 
+        var id = Guid.NewGuid();
+
         return new ProductGroup
         {
-            Id = Guid.NewGuid(),
+            Id = id,
             Name = name,
             Description = description,
             CategoryId = categoryId,
             Brand = brand,
+            ImageUrl = string.IsNullOrWhiteSpace(imageUrl) ? DefaultImageUrl(id) : imageUrl,
             Status = ProductGroupStatus.Draft,
             CreatedAt = now,
             UpdatedAt = now,
@@ -65,6 +73,11 @@ public sealed class ProductGroup : AggregateRoot
             UpdatedBy = createdBy,
         };
     }
+
+    /// <summary>Every product must have a real, loadable photo - a deterministic real stock
+    /// photo keyed by this product's own id, so the invariant holds even for a caller that never
+    /// supplies one (e.g. an existing integration unaware of this field).</summary>
+    private static string DefaultImageUrl(Guid id) => $"https://picsum.photos/seed/{id}/640/640";
 
     public void Publish(string updatedBy, DateTimeOffset now)
     {
@@ -85,7 +98,8 @@ public sealed class ProductGroup : AggregateRoot
         string? categoryId,
         string? brand,
         string updatedBy,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        string? imageUrl = null)
     {
         if (Status == ProductGroupStatus.Archived)
         {
@@ -116,6 +130,12 @@ public sealed class ProductGroup : AggregateRoot
         {
             Brand = brand;
             changed.Add("brand");
+        }
+
+        if (imageUrl is not null && imageUrl != ImageUrl)
+        {
+            ImageUrl = imageUrl;
+            changed.Add("imageUrl");
         }
 
         if (changed.Count > 0)

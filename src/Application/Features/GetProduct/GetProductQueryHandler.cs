@@ -33,6 +33,7 @@ public sealed class GetProductQueryHandler(IProductCache cache, IProductReadMode
             new ProductResponseAttributesDto(readModel.Size, readModel.Color, readModel.ExtendedAttributes),
             new ProductResponseRatingSummaryDto(readModel.RatingSummary.Avg, readModel.RatingSummary.Count),
             readModel.LastUpdatedAt,
-            readModel.ProductGroupId);
+            readModel.ProductGroupId,
+            readModel.ImageUrl);
     }
 }

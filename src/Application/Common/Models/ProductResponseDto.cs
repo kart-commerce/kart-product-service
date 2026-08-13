@@ -19,7 +19,8 @@ public sealed record ProductResponseDto(
     // proxy) can resolve the parent Product-group's id before calling this service's own
     // PATCH /v1/product-groups/{productGroupId:guid} - previously nothing in the public
     // ProductResponse schema exposed it at all, so that resolution was impossible.
-    Guid ProductGroupId);
+    Guid ProductGroupId,
+    string ImageUrl);
 
 public sealed record ProductResponseCategoryDto(string Id, string? Name);
 

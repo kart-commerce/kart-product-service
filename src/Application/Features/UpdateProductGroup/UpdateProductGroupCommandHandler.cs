@@ -18,7 +18,7 @@ public sealed class UpdateProductGroupCommandHandler(
 {
     public async Task<UpdateProductGroupResponse> Handle(UpdateProductGroupCommand request, CancellationToken cancellationToken)
     {
-        var hasFieldEdit = request.Name is not null || request.Description is not null || request.CategoryId is not null || request.Brand is not null;
+        var hasFieldEdit = request.Name is not null || request.Description is not null || request.CategoryId is not null || request.Brand is not null || request.ImageUrl is not null;
         var hasArchive = request.Status is not null;
 
         if (hasFieldEdit && hasArchive)
@@ -49,7 +49,7 @@ public sealed class UpdateProductGroupCommandHandler(
         }
         else
         {
-            var changedFields = productGroup.UpdateFields(request.Name, request.Description, request.CategoryId, request.Brand, clientId, now);
+            var changedFields = productGroup.UpdateFields(request.Name, request.Description, request.CategoryId, request.Brand, clientId, now, request.ImageUrl);
 
             if (changedFields.Count > 0)
             {
@@ -65,7 +65,8 @@ public sealed class UpdateProductGroupCommandHandler(
                         productGroup.Brand,
                         sibling.Status.ToString(),
                         sibling.Attributes,
-                        now);
+                        now,
+                        productGroup.ImageUrl);
 
                     outboxEventWriter.Enqueue(sibling.Sku, domainEvent, clientId);
                     affectedSkus.Add(sibling.Sku);

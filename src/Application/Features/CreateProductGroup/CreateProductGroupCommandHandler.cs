@@ -31,7 +31,7 @@ public sealed class CreateProductGroupCommandHandler(
         // cross-aggregate transaction - both are added to the same DbContext here and committed
         // together only because they happen to share this one HTTP request, not because they are
         // one aggregate.
-        var productGroup = ProductGroup.Create(request.Name, request.Description, request.CategoryId, request.Brand, clientId, now);
+        var productGroup = ProductGroup.Create(request.Name, request.Description, request.CategoryId, request.Brand, clientId, now, request.ImageUrl);
         productGroupRepository.Add(productGroup);
 
         var variant = Variant.Create(request.Sku, productGroup.Id, request.Price, request.Attributes, clientId, now);
@@ -49,7 +49,8 @@ public sealed class CreateProductGroupCommandHandler(
             variant.Price,
             variant.Status.ToString(),
             variant.Attributes,
-            now);
+            now,
+            productGroup.ImageUrl);
 
         outboxEventWriter.Enqueue(variant.Sku, domainEvent, clientId);
 

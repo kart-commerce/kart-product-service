@@ -32,7 +32,8 @@ public sealed class ProductGroupsController(ISender sender, ILogger<ProductGroup
             request.Brand,
             request.Sku,
             new Domain.Variants.Money(request.Price.Amount, request.Price.Currency),
-            (request.Attributes ?? new ProductAttributesRequest(null, null, null)).ToDomain());
+            (request.Attributes ?? new ProductAttributesRequest(null, null, null)).ToDomain(),
+            request.ImageUrl);
 
         var response = await sender.Send(command, cancellationToken);
         logger.LogInformation("Stage {Stage}: product-group {ProductGroupId} / sku {Sku} created", "AdminProductManagementProcessCompletedSuccessfully", response.ProductGroupId, response.Sku);
@@ -47,7 +48,7 @@ public sealed class ProductGroupsController(ISender sender, ILogger<ProductGroup
         using var flowScope = KartFlowContext.Push("ProductCatalogManagementAdmin");
         logger.LogInformation("Stage {Stage}: update product-group {ProductGroupId} received", "ProductGroupsControllerReceived", productGroupId);
 
-        var command = new UpdateProductGroupCommand(productGroupId, request.Name, request.Description, request.CategoryId, request.Brand, request.Status);
+        var command = new UpdateProductGroupCommand(productGroupId, request.Name, request.Description, request.CategoryId, request.Brand, request.Status, request.ImageUrl);
         var response = await sender.Send(command, cancellationToken);
         logger.LogInformation("Stage {Stage}: product-group {ProductGroupId} updated", "AdminProductManagementProcessCompletedSuccessfully", productGroupId);
         return Ok(response);
