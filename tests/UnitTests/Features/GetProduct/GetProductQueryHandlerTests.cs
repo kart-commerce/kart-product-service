@@ -3,6 +3,7 @@ using Kart.Product.Application.Common.Exceptions;
 using Kart.Product.Application.Common.Interfaces;
 using Kart.Product.Application.Common.Models;
 using Kart.Product.Application.Features.GetProduct;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
@@ -13,7 +14,7 @@ public sealed class GetProductQueryHandlerTests
     private readonly Mock<IProductCache> _cache = new();
     private readonly Mock<IProductReadModelRepository> _readModelRepository = new();
 
-    private GetProductQueryHandler CreateHandler() => new(_cache.Object, _readModelRepository.Object);
+    private GetProductQueryHandler CreateHandler() => new(_cache.Object, _readModelRepository.Object, NullLogger<GetProductQueryHandler>.Instance);
 
     public GetProductQueryHandlerTests()
     {

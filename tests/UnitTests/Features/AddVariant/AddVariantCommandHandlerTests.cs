@@ -4,6 +4,7 @@ using Kart.Product.Application.Common.Interfaces;
 using Kart.Product.Application.Features.AddVariant;
 using Kart.Product.Domain.ProductGroups;
 using Kart.Product.Domain.Variants;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Xunit;
 
@@ -25,7 +26,8 @@ public sealed class AddVariantCommandHandlerTests
         _outboxEventWriter.Object,
         _unitOfWork.Object,
         _currentPrincipal.Object,
-        TimeProvider.System);
+        TimeProvider.System,
+        NullLogger<AddVariantCommandHandler>.Instance);
 
     public AddVariantCommandHandlerTests()
     {

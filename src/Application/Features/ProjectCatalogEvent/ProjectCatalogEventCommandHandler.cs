@@ -45,9 +45,15 @@ public sealed class ProjectCatalogEventCommandHandler(
                 await ProjectDiscontinuedAsync(request.PayloadJson, cancellationToken);
                 break;
             default:
-                logger.LogWarning("Unrecognized catalog event type {EventType} - skipping projection", request.EventType);
-                break;
+                logger.LogWarning("Stage {Stage}: unrecognized catalog event type {EventType} - skipping projection", "CatalogEventTypeUnrecognized", request.EventType);
+                return;
         }
+
+        // Terminal success line for this service's own (consumer-side) participation in the
+        // Product Catalog Management (Admin) flow - the producer side's own completion line is
+        // each command handler's own *ProcessCompletedSuccessfully log; this is the mirror on the
+        // read-model side (checkpoint-logging-standard.md stage 12).
+        logger.LogInformation("Stage {Stage}: {EventType} catalog projection completed", "ProductCatalogManagementAdminFlowStepCompleted", request.EventType);
     }
 
     private async Task ProjectCreatedAsync(string payloadJson, CancellationToken cancellationToken)
@@ -73,6 +79,7 @@ public sealed class ProjectCatalogEventCommandHandler(
             LastUpdatedAt = evt.OccurredAt,
         };
 
+        logger.LogInformation("Stage {Stage}: sku {Sku} product_read_model write started (upsert)", "ReadModelWriteStarted", evt.Sku);
         await readModelRepository.UpsertAsync(readModel, cancellationToken);
         logger.LogInformation("Stage {Stage}: sku {Sku} upserted into product_read_model", "ReadModelPersisted", evt.Sku);
     }
@@ -80,6 +87,7 @@ public sealed class ProjectCatalogEventCommandHandler(
     private async Task ProjectPriceChangedAsync(string payloadJson, CancellationToken cancellationToken)
     {
         var evt = Deserialize<ProductPriceChangedDomainEvent>(payloadJson);
+        logger.LogInformation("Stage {Stage}: sku {Sku} product_read_model write started (price patch)", "ReadModelWriteStarted", evt.Sku);
         await readModelRepository.UpdatePriceAsync(evt.Sku, evt.NewPrice.Amount, evt.NewPrice.Currency, evt.OccurredAt, cancellationToken);
         logger.LogInformation("Stage {Stage}: sku {Sku} price field patched in product_read_model (CacheInvalidated follows via Redis write-through)", "ReadModelPersisted", evt.Sku);
     }
@@ -113,6 +121,7 @@ public sealed class ProjectCatalogEventCommandHandler(
 
         if (fields.Count > 0)
         {
+            logger.LogInformation("Stage {Stage}: sku {Sku} product_read_model write started (fields {Fields})", "ReadModelWriteStarted", evt.Sku, fields.Keys);
             await readModelRepository.UpdateFieldsAsync(evt.Sku, fields, evt.OccurredAt, cancellationToken);
             logger.LogInformation("Stage {Stage}: sku {Sku} fields {Fields} patched in product_read_model", "ReadModelPersisted", evt.Sku, fields.Keys);
         }
@@ -121,6 +130,7 @@ public sealed class ProjectCatalogEventCommandHandler(
     private async Task ProjectDiscontinuedAsync(string payloadJson, CancellationToken cancellationToken)
     {
         var evt = Deserialize<ProductDiscontinuedDomainEvent>(payloadJson);
+        logger.LogInformation("Stage {Stage}: sku {Sku} product_read_model write started (mark discontinued)", "ReadModelWriteStarted", evt.Sku);
         await readModelRepository.MarkDiscontinuedAsync(evt.Sku, evt.OccurredAt, cancellationToken);
         logger.LogInformation("Stage {Stage}: sku {Sku} marked discontinued in product_read_model", "ReadModelPersisted", evt.Sku);
     }

@@ -87,6 +87,8 @@ public sealed class CatalogProjectionConsumerHostedService(
 
             using var scope = scopeFactory.CreateScope();
             var sender = scope.ServiceProvider.GetRequiredService<ISender>();
+
+            logger.LogInformation("Stage {Stage}: dispatching ProjectCatalogEventCommand for {EventType}", "ProjectCatalogEventCommandDispatched", eventType);
             await sender.Send(new ProjectCatalogEventCommand(eventType, payloadJson), cancellationToken);
 
             channel.BasicAck(delivery.DeliveryTag, multiple: false);

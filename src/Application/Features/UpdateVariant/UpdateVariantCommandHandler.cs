@@ -24,32 +24,46 @@ public sealed class UpdateVariantCommandHandler(
         var providedCount = new[] { request.Price is not null, request.Status is not null, request.Attributes is not null }.Count(x => x);
         if (providedCount > 1)
         {
+            logger.LogWarning("Stage {Stage}: update rejected for sku {Sku}, exactly one of price/status/attributes may be provided per call", "MixedUpdateRequestRejected", request.Sku);
             throw new MixedUpdateRequestException("Exactly one of price, status, or attributes may be provided per call.");
         }
 
-        var variant = await variantRepository.GetBySkuAsync(request.Sku, cancellationToken)
-            ?? throw new VariantNotFoundException(request.Sku);
+        var variant = await variantRepository.GetBySkuAsync(request.Sku, cancellationToken);
+        if (variant is null)
+        {
+            logger.LogWarning("Stage {Stage}: update rejected, variant {Sku} not found", "VariantNotFound", request.Sku);
+            throw new VariantNotFoundException(request.Sku);
+        }
 
-        var productGroup = await productGroupRepository.GetByIdAsync(variant.ProductGroupId, cancellationToken)
-            ?? throw new ProductGroupNotFoundException(variant.ProductGroupId);
+        var productGroup = await productGroupRepository.GetByIdAsync(variant.ProductGroupId, cancellationToken);
+        if (productGroup is null)
+        {
+            logger.LogWarning("Stage {Stage}: update rejected for sku {Sku}, product-group {ProductGroupId} not found", "ProductGroupNotFound", request.Sku, variant.ProductGroupId);
+            throw new ProductGroupNotFoundException(variant.ProductGroupId);
+        }
 
         var now = timeProvider.GetUtcNow();
         var clientId = currentPrincipal.ClientId;
 
         IDomainEvent domainEvent;
 
+        // Stage 5 DecisionBranch: price/status/attributes are three meaningfully different code
+        // paths - each fires its own event type (checkpoint-logging-standard.md).
         if (request.Price is not null)
         {
+            logger.LogInformation("Stage {Stage}: sku {Sku} update branch resolved to {Branch}", "PriceChangeBranch", variant.Sku, "PriceChange");
             var oldPrice = variant.ChangePrice(request.Price, clientId, now);
             domainEvent = new ProductPriceChangedDomainEvent(variant.Sku, oldPrice, request.Price, now);
         }
         else if (request.Status is not null)
         {
+            logger.LogInformation("Stage {Stage}: sku {Sku} update branch resolved to {Branch}", "DiscontinueBranch", variant.Sku, "Discontinue");
             variant.Discontinue(clientId, now);
             domainEvent = new ProductDiscontinuedDomainEvent(variant.Sku, now);
         }
         else
         {
+            logger.LogInformation("Stage {Stage}: sku {Sku} update branch resolved to {Branch}", "AttributesEditBranch", variant.Sku, "AttributesEdit");
             variant.UpdateAttributes(request.Attributes!, clientId, now);
             domainEvent = new ProductUpdatedDomainEvent(
                 variant.Sku,
@@ -96,6 +110,12 @@ public sealed class UpdateVariantCommandHandler(
         var ratingSummary = existingReadModel is null
             ? new ProductResponseRatingSummaryDto(0, 0)
             : new ProductResponseRatingSummaryDto(existingReadModel.RatingSummary.Avg, existingReadModel.RatingSummary.Count);
+
+        logger.LogInformation(
+            "Stage {Stage}: sku {Sku} update completed ({EventType})",
+            "UpdateVariantProcessCompletedSuccessfully",
+            variant.Sku,
+            domainEvent.GetType().Name);
 
         return new ProductResponseDto(
             variant.Sku,

@@ -24,7 +24,9 @@ public sealed class ProductsController(ISender sender, ILogger<ProductsControlle
         using var flowScope = KartFlowContext.Push("NormalShoppingPurchaseJourney");
         logger.LogInformation("Stage {Stage}: product detail requested for {Sku}", "ProductDetailRequestReceived", sku);
 
-        var response = await sender.Send(new GetProductQuery(sku), cancellationToken);
+        var query = new GetProductQuery(sku);
+        logger.LogInformation("Stage {Stage}: dispatching GetProductQuery for {Sku}", "GetProductQueryDispatched", sku);
+        var response = await sender.Send(query, cancellationToken);
 
         logger.LogInformation("Stage {Stage}: product detail returned for {Sku}", "ProductDetailReturned", sku);
         return Ok(response);
@@ -53,6 +55,7 @@ public sealed class ProductsController(ISender sender, ILogger<ProductsControlle
             request.Status,
             request.Attributes?.ToDomain());
 
+        logger.LogInformation("Stage {Stage}: dispatching UpdateVariantCommand for {Sku}", "UpdateVariantCommandDispatched", sku);
         var response = await sender.Send(command, cancellationToken);
         logger.LogInformation("Stage {Stage}: variant {Sku} updated", "AdminProductManagementProcessCompletedSuccessfully", sku);
         return Ok(response);

@@ -35,6 +35,7 @@ public sealed class ProductGroupsController(ISender sender, ILogger<ProductGroup
             (request.Attributes ?? new ProductAttributesRequest(null, null, null)).ToDomain(),
             request.ImageUrl);
 
+        logger.LogInformation("Stage {Stage}: dispatching CreateProductGroupCommand for sku {Sku}", "CreateProductGroupCommandDispatched", request.Sku);
         var response = await sender.Send(command, cancellationToken);
         logger.LogInformation("Stage {Stage}: product-group {ProductGroupId} / sku {Sku} created", "AdminProductManagementProcessCompletedSuccessfully", response.ProductGroupId, response.Sku);
         return CreatedAtAction(nameof(ProductsController.Get), "Products", new { sku = response.Sku }, response);
@@ -49,6 +50,7 @@ public sealed class ProductGroupsController(ISender sender, ILogger<ProductGroup
         logger.LogInformation("Stage {Stage}: update product-group {ProductGroupId} received", "ProductGroupsControllerReceived", productGroupId);
 
         var command = new UpdateProductGroupCommand(productGroupId, request.Name, request.Description, request.CategoryId, request.Brand, request.Status, request.ImageUrl);
+        logger.LogInformation("Stage {Stage}: dispatching UpdateProductGroupCommand for {ProductGroupId}", "UpdateProductGroupCommandDispatched", productGroupId);
         var response = await sender.Send(command, cancellationToken);
         logger.LogInformation("Stage {Stage}: product-group {ProductGroupId} updated", "AdminProductManagementProcessCompletedSuccessfully", productGroupId);
         return Ok(response);
@@ -68,6 +70,7 @@ public sealed class ProductGroupsController(ISender sender, ILogger<ProductGroup
             new Domain.Variants.Money(request.Price.Amount, request.Price.Currency),
             (request.Attributes ?? new ProductAttributesRequest(null, null, null)).ToDomain());
 
+        logger.LogInformation("Stage {Stage}: dispatching AddVariantCommand for sku {Sku} on product-group {ProductGroupId}", "AddVariantCommandDispatched", request.Sku, productGroupId);
         var response = await sender.Send(command, cancellationToken);
         logger.LogInformation("Stage {Stage}: variant {Sku} added to product-group {ProductGroupId}", "AdminProductManagementProcessCompletedSuccessfully", response.Sku, productGroupId);
         return CreatedAtAction(nameof(ProductsController.Get), "Products", new { sku = response.Sku }, response);
@@ -87,7 +90,9 @@ public sealed class ProductGroupsController(ISender sender, ILogger<ProductGroup
         using var flowScope = KartFlowContext.Push("NormalShoppingPurchaseJourney");
         logger.LogInformation("Stage {Stage}: product-group variants requested for {ProductGroupId}", "ProductGroupVariantsRequested", productGroupId);
 
-        var response = await sender.Send(new ListProductGroupVariantsQuery(productGroupId), cancellationToken);
+        var query = new ListProductGroupVariantsQuery(productGroupId);
+        logger.LogInformation("Stage {Stage}: dispatching ListProductGroupVariantsQuery for {ProductGroupId}", "ListProductGroupVariantsQueryDispatched", productGroupId);
+        var response = await sender.Send(query, cancellationToken);
 
         logger.LogInformation("Stage {Stage}: {Count} variant(s) returned for product-group {ProductGroupId}", "ProductGroupVariantsReturned", response.Count, productGroupId);
         return Ok(response);

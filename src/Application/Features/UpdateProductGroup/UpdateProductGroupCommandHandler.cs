@@ -23,15 +23,32 @@ public sealed class UpdateProductGroupCommandHandler(
 
         if (hasFieldEdit && hasArchive)
         {
+            logger.LogWarning(
+                "Stage {Stage}: update rejected for product-group {ProductGroupId}, a field edit may not be combined with status: Archived",
+                "MixedUpdateRequestRejected",
+                request.ProductGroupId);
             throw new MixedUpdateRequestException("A field edit may not be combined with status: Archived in the same request.");
         }
 
-        var productGroup = await productGroupRepository.GetByIdAsync(request.ProductGroupId, cancellationToken)
-            ?? throw new ProductGroupNotFoundException(request.ProductGroupId);
+        var productGroup = await productGroupRepository.GetByIdAsync(request.ProductGroupId, cancellationToken);
+        if (productGroup is null)
+        {
+            logger.LogWarning("Stage {Stage}: update rejected, product-group {ProductGroupId} not found", "ProductGroupNotFound", request.ProductGroupId);
+            throw new ProductGroupNotFoundException(request.ProductGroupId);
+        }
 
         var now = timeProvider.GetUtcNow();
         var clientId = currentPrincipal.ClientId;
         var affectedSkus = new List<string>();
+
+        // Stage 5 DecisionBranch: archive vs. field-edit are the two meaningfully different code
+        // paths this handler can take (checkpoint-logging-standard.md) - each fans out a
+        // different outbox event type to every currently-Active sibling Variant.
+        logger.LogInformation(
+            "Stage {Stage}: product-group {ProductGroupId} update branch resolved to {Branch}",
+            hasArchive ? "ArchiveBranch" : "FieldEditBranch",
+            productGroup.Id,
+            hasArchive ? "Archive" : "FieldEdit");
 
         if (hasArchive)
         {
@@ -91,6 +108,11 @@ public sealed class UpdateProductGroupCommandHandler(
                 hasArchive ? "ProductDiscontinued" : "ProductUpdated",
                 affectedSkus);
         }
+
+        logger.LogInformation(
+            "Stage {Stage}: product-group {ProductGroupId} update completed",
+            "UpdateProductGroupProcessCompletedSuccessfully",
+            productGroup.Id);
 
         return new UpdateProductGroupResponse(productGroup.Id, affectedSkus);
     }
