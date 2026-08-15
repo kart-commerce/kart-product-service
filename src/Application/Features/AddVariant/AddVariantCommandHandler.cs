@@ -55,16 +55,7 @@ public sealed class AddVariantCommandHandler(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
-            "Stage {Stage}: variant {Sku} persisted to product-group {ProductGroupId}",
-            "ProductPersistedToDatabase",
-            variant.Sku,
-            productGroup.Id);
-        logger.LogInformation(
-            "Stage {Stage}: ProductCreated outbox event saved for sku {Sku}",
-            "ProductOutboxEventSaved",
-            variant.Sku);
-        logger.LogInformation(
-            "Stage {Stage}: variant {Sku} add-to-product-group {ProductGroupId} completed",
+            "Stage {Stage}: variant {Sku} added to product-group {ProductGroupId} and persisted, ProductCreated outbox event enqueued",
             "AddVariantProcessCompletedSuccessfully",
             variant.Sku,
             productGroup.Id);

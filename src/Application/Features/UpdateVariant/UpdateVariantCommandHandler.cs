@@ -47,8 +47,8 @@ public sealed class UpdateVariantCommandHandler(
 
         IDomainEvent domainEvent;
 
-        // Stage 5 DecisionBranch: price/status/attributes are three meaningfully different code
-        // paths - each fires its own event type (checkpoint-logging-standard.md).
+        // Price/status/attributes are three meaningfully different code paths - each fires its
+        // own event type.
         if (request.Price is not null)
         {
             logger.LogInformation("Stage {Stage}: sku {Sku} update branch resolved to {Branch}", "PriceChangeBranch", variant.Sku, "PriceChange");
@@ -82,15 +82,10 @@ public sealed class UpdateVariantCommandHandler(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
-            "Stage {Stage}: variant {Sku} persisted ({EventType})",
+            "Stage {Stage}: variant {Sku} persisted ({EventType}), outbox event enqueued",
             "ProductPersistedToDatabase",
             variant.Sku,
             domainEvent.GetType().Name);
-        logger.LogInformation(
-            "Stage {Stage}: {EventType} outbox event saved for sku {Sku}",
-            "ProductOutboxEventSaved",
-            domainEvent.GetType().Name,
-            variant.Sku);
 
         // Write-through the new price into the cache synchronously with the Postgres commit
         // above (design-decisions.md, "Caching Strategy for Product Reads") - closes the

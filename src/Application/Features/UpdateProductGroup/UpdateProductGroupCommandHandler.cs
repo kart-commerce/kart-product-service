@@ -41,9 +41,9 @@ public sealed class UpdateProductGroupCommandHandler(
         var clientId = currentPrincipal.ClientId;
         var affectedSkus = new List<string>();
 
-        // Stage 5 DecisionBranch: archive vs. field-edit are the two meaningfully different code
-        // paths this handler can take (checkpoint-logging-standard.md) - each fans out a
-        // different outbox event type to every currently-Active sibling Variant.
+        // Archive vs. field-edit are the two meaningfully different code paths this handler can
+        // take - each fans out a different outbox event type to every currently-Active sibling
+        // Variant.
         logger.LogInformation(
             "Stage {Stage}: product-group {ProductGroupId} update branch resolved to {Branch}",
             hasArchive ? "ArchiveBranch" : "FieldEditBranch",
@@ -93,26 +93,24 @@ public sealed class UpdateProductGroupCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        logger.LogInformation(
-            "Stage {Stage}: product-group {ProductGroupId} persisted ({Operation}), {AffectedSkuCount} sibling variant(s) affected",
-            "ProductPersistedToDatabase",
-            productGroup.Id,
-            hasArchive ? "archive" : "field-edit",
-            affectedSkus.Count);
-
         if (affectedSkus.Count > 0)
         {
             logger.LogInformation(
-                "Stage {Stage}: {EventType} outbox event(s) saved for sku(s) {Skus}",
-                "ProductOutboxEventSaved",
+                "Stage {Stage}: product-group {ProductGroupId} persisted ({Operation}), {EventType} outbox event(s) enqueued for sku(s) {Skus}",
+                "UpdateProductGroupProcessCompletedSuccessfully",
+                productGroup.Id,
+                hasArchive ? "archive" : "field-edit",
                 hasArchive ? "ProductDiscontinued" : "ProductUpdated",
                 affectedSkus);
         }
-
-        logger.LogInformation(
-            "Stage {Stage}: product-group {ProductGroupId} update completed",
-            "UpdateProductGroupProcessCompletedSuccessfully",
-            productGroup.Id);
+        else
+        {
+            logger.LogInformation(
+                "Stage {Stage}: product-group {ProductGroupId} persisted ({Operation}), no sibling variants affected",
+                "UpdateProductGroupProcessCompletedSuccessfully",
+                productGroup.Id,
+                hasArchive ? "archive" : "field-edit");
+        }
 
         return new UpdateProductGroupResponse(productGroup.Id, affectedSkus);
     }

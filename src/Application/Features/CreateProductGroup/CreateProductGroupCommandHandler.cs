@@ -68,16 +68,7 @@ public sealed class CreateProductGroupCommandHandler(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
-            "Stage {Stage}: product-group {ProductGroupId} and variant {Sku} persisted to product_groups/variants",
-            "ProductPersistedToDatabase",
-            productGroup.Id,
-            variant.Sku);
-        logger.LogInformation(
-            "Stage {Stage}: ProductCreated outbox event saved for sku {Sku}",
-            "ProductOutboxEventSaved",
-            variant.Sku);
-        logger.LogInformation(
-            "Stage {Stage}: product-group {ProductGroupId} / sku {Sku} creation completed",
+            "Stage {Stage}: product-group {ProductGroupId} / sku {Sku} created and persisted, ProductCreated outbox event enqueued",
             "CreateProductGroupProcessCompletedSuccessfully",
             productGroup.Id,
             variant.Sku);
