@@ -13,4 +13,5 @@ public sealed record CreateProductGroupCommand(
     string? Brand,
     string Sku,
     Money Price,
-    ProductAttributes Attributes) : IRequest<CreateProductGroupResponse>;
+    ProductAttributes Attributes,
+    string? ImageUrl = null) : IRequest<CreateProductGroupResponse>;

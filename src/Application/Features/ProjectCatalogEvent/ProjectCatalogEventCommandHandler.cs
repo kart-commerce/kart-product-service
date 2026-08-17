@@ -22,6 +22,7 @@ public sealed class ProjectCatalogEventCommandHandler(
         ["description"] = "description",
         ["categoryId"] = "category.id",
         ["brand"] = "brand",
+        ["imageUrl"] = "imageUrl",
         ["size"] = "size",
         ["color"] = "color",
         ["extendedAttributes"] = "extendedAttributes",
@@ -44,9 +45,11 @@ public sealed class ProjectCatalogEventCommandHandler(
                 await ProjectDiscontinuedAsync(request.PayloadJson, cancellationToken);
                 break;
             default:
-                logger.LogWarning("Unrecognized catalog event type {EventType} - skipping projection", request.EventType);
-                break;
+                logger.LogWarning("Stage {Stage}: unrecognized catalog event type {EventType} - skipping projection", "CatalogEventTypeUnrecognized", request.EventType);
+                return;
         }
+
+        logger.LogInformation("Stage {Stage}: {EventType} catalog projection completed", "ProductCatalogManagementAdminFlowStepCompleted", request.EventType);
     }
 
     private async Task ProjectCreatedAsync(string payloadJson, CancellationToken cancellationToken)
@@ -61,6 +64,7 @@ public sealed class ProjectCatalogEventCommandHandler(
             Description = evt.Description,
             Category = new ProductReadModelCategory(evt.CategoryId, null),
             Brand = evt.Brand,
+            ImageUrl = evt.ImageUrl ?? string.Empty,
             PriceAmount = evt.Price.Amount,
             PriceCurrency = evt.Price.Currency,
             Status = evt.Status,
@@ -101,6 +105,7 @@ public sealed class ProjectCatalogEventCommandHandler(
                 "description" => evt.Description,
                 "categoryId" => evt.CategoryId,
                 "brand" => evt.Brand,
+                "imageUrl" => evt.ImageUrl,
                 "size" => evt.Attributes.Size,
                 "color" => evt.Attributes.Color,
                 "extendedAttributes" => evt.Attributes.ExtendedAttributes,

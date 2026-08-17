@@ -11,6 +11,9 @@ public sealed class InMemoryProductReadModelRepository : IProductReadModelReposi
     public Task<ProductReadModel?> GetBySkuAsync(string sku, CancellationToken cancellationToken) =>
         Task.FromResult(_store.GetValueOrDefault(sku));
 
+    public Task<IReadOnlyList<ProductReadModel>> ListByProductGroupIdAsync(Guid productGroupId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ProductReadModel>>(_store.Values.Where(m => m.ProductGroupId == productGroupId).ToList());
+
     public Task UpsertAsync(ProductReadModel readModel, CancellationToken cancellationToken)
     {
         _store[readModel.Sku] = readModel;

@@ -18,20 +18,37 @@ public sealed class UpdateProductGroupCommandHandler(
 {
     public async Task<UpdateProductGroupResponse> Handle(UpdateProductGroupCommand request, CancellationToken cancellationToken)
     {
-        var hasFieldEdit = request.Name is not null || request.Description is not null || request.CategoryId is not null || request.Brand is not null;
+        var hasFieldEdit = request.Name is not null || request.Description is not null || request.CategoryId is not null || request.Brand is not null || request.ImageUrl is not null;
         var hasArchive = request.Status is not null;
 
         if (hasFieldEdit && hasArchive)
         {
+            logger.LogWarning(
+                "Stage {Stage}: update rejected for product-group {ProductGroupId}, a field edit may not be combined with status: Archived",
+                "MixedUpdateRequestRejected",
+                request.ProductGroupId);
             throw new MixedUpdateRequestException("A field edit may not be combined with status: Archived in the same request.");
         }
 
-        var productGroup = await productGroupRepository.GetByIdAsync(request.ProductGroupId, cancellationToken)
-            ?? throw new ProductGroupNotFoundException(request.ProductGroupId);
+        var productGroup = await productGroupRepository.GetByIdAsync(request.ProductGroupId, cancellationToken);
+        if (productGroup is null)
+        {
+            logger.LogWarning("Stage {Stage}: update rejected, product-group {ProductGroupId} not found", "ProductGroupNotFound", request.ProductGroupId);
+            throw new ProductGroupNotFoundException(request.ProductGroupId);
+        }
 
         var now = timeProvider.GetUtcNow();
         var clientId = currentPrincipal.ClientId;
         var affectedSkus = new List<string>();
+
+        // Archive vs. field-edit are the two meaningfully different code paths this handler can
+        // take - each fans out a different outbox event type to every currently-Active sibling
+        // Variant.
+        logger.LogInformation(
+            "Stage {Stage}: product-group {ProductGroupId} update branch resolved to {Branch}",
+            hasArchive ? "ArchiveBranch" : "FieldEditBranch",
+            productGroup.Id,
+            hasArchive ? "Archive" : "FieldEdit");
 
         if (hasArchive)
         {
@@ -49,7 +66,7 @@ public sealed class UpdateProductGroupCommandHandler(
         }
         else
         {
-            var changedFields = productGroup.UpdateFields(request.Name, request.Description, request.CategoryId, request.Brand, clientId, now);
+            var changedFields = productGroup.UpdateFields(request.Name, request.Description, request.CategoryId, request.Brand, clientId, now, request.ImageUrl);
 
             if (changedFields.Count > 0)
             {
@@ -65,7 +82,8 @@ public sealed class UpdateProductGroupCommandHandler(
                         productGroup.Brand,
                         sibling.Status.ToString(),
                         sibling.Attributes,
-                        now);
+                        now,
+                        productGroup.ImageUrl);
 
                     outboxEventWriter.Enqueue(sibling.Sku, domainEvent, clientId);
                     affectedSkus.Add(sibling.Sku);
@@ -75,20 +93,23 @@ public sealed class UpdateProductGroupCommandHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        logger.LogInformation(
-            "Stage {Stage}: product-group {ProductGroupId} persisted ({Operation}), {AffectedSkuCount} sibling variant(s) affected",
-            "ProductPersistedToDatabase",
-            productGroup.Id,
-            hasArchive ? "archive" : "field-edit",
-            affectedSkus.Count);
-
         if (affectedSkus.Count > 0)
         {
             logger.LogInformation(
-                "Stage {Stage}: {EventType} outbox event(s) saved for sku(s) {Skus}",
-                "ProductOutboxEventSaved",
+                "Stage {Stage}: product-group {ProductGroupId} persisted ({Operation}), {EventType} outbox event(s) enqueued for sku(s) {Skus}",
+                "UpdateProductGroupProcessCompletedSuccessfully",
+                productGroup.Id,
+                hasArchive ? "archive" : "field-edit",
                 hasArchive ? "ProductDiscontinued" : "ProductUpdated",
                 affectedSkus);
+        }
+        else
+        {
+            logger.LogInformation(
+                "Stage {Stage}: product-group {ProductGroupId} persisted ({Operation}), no sibling variants affected",
+                "UpdateProductGroupProcessCompletedSuccessfully",
+                productGroup.Id,
+                hasArchive ? "archive" : "field-edit");
         }
 
         return new UpdateProductGroupResponse(productGroup.Id, affectedSkus);

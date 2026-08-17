@@ -91,6 +91,9 @@ paths:
                   description: Caller-supplied (Admin's catalog UI or the Partner bulk feed already assigns SKUs). Must be globally unique.
                 price: { $ref: '#/components/schemas/Money' }
                 attributes: { $ref: '#/components/schemas/ProductAttributes' }
+                imageUrl:
+                  type: string
+                  description: A real photo URL. Omit and a real stock photo is assigned automatically - every product has one either way.
       responses:
         '201':
           description: Product group and its initial Variant created; `ProductCreated` published for the initial SKU.
@@ -143,6 +146,7 @@ paths:
                 description: { type: string }
                 categoryId: { type: string }
                 brand: { type: string }
+                imageUrl: { type: string }
                 status:
                   type: string
                   enum: [Archived]
@@ -367,6 +371,11 @@ components:
             The parent Product-group's id. Added so a caller that only knows a SKU (e.g.
             kart-admin-service's /admin/products/{sku} proxy) can resolve it before calling
             PATCH /v1/product-groups/{productGroupId}.
+        imageUrl:
+          type: string
+          description: >-
+            A real, loadable photo URL - every product has one (defaulted server-side to a real
+            stock photo if the caller doesn't supply one at creation).
 
     Problem:
       type: object

@@ -21,4 +21,5 @@ public sealed record ProductCreatedDomainEvent(
     Money Price,
     string Status,
     ProductAttributes Attributes,
-    DateTimeOffset OccurredAt) : IDomainEvent;
+    DateTimeOffset OccurredAt,
+    string? ImageUrl = null) : IDomainEvent;

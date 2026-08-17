@@ -24,6 +24,12 @@ public sealed class MongoProductReadModelRepository(IMongoDatabase database) : I
         return document is null ? null : ToApplicationModel(document);
     }
 
+    public async Task<IReadOnlyList<ProductReadModel>> ListByProductGroupIdAsync(Guid productGroupId, CancellationToken cancellationToken)
+    {
+        var documents = await Collection.Find(d => d.ProductGroupId == productGroupId).ToListAsync(cancellationToken);
+        return documents.Select(ToApplicationModel).ToList();
+    }
+
     public async Task UpsertAsync(ProductReadModel readModel, CancellationToken cancellationToken)
     {
         var document = ToDocument(readModel);
@@ -125,6 +131,7 @@ public sealed class MongoProductReadModelRepository(IMongoDatabase database) : I
         Description = model.Description,
         Category = new ProductReadModelCategoryDocument { CategoryId = model.Category.Id, Name = model.Category.Name },
         Brand = model.Brand,
+        ImageUrl = model.ImageUrl,
         Price = new ProductReadModelPriceDocument { Amount = model.PriceAmount, Currency = model.PriceCurrency },
         Status = model.Status,
         Size = model.Size,
@@ -142,6 +149,7 @@ public sealed class MongoProductReadModelRepository(IMongoDatabase database) : I
         Description = document.Description,
         Category = new ProductReadModelCategory(document.Category.CategoryId, document.Category.Name),
         Brand = document.Brand,
+        ImageUrl = document.ImageUrl,
         PriceAmount = document.Price.Amount,
         PriceCurrency = document.Price.Currency,
         Status = document.Status,

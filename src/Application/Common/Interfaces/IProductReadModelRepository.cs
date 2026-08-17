@@ -13,6 +13,13 @@ public interface IProductReadModelRepository
 {
     Task<ProductReadModel?> GetBySkuAsync(string sku, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The public variant-axis read (e.g. a PDP's color/size picker) — every sibling SKU sharing
+    /// <paramref name="productGroupId"/>, across every category shard (a scatter-gather read, not
+    /// shard-key-targeted; acceptable here since a product group's own variant count is small).
+    /// </summary>
+    Task<IReadOnlyList<ProductReadModel>> ListByProductGroupIdAsync(Guid productGroupId, CancellationToken cancellationToken);
+
     /// <summary>Full document upsert - only ever called for <c>ProductCreated</c>, the one event
     /// that materializes a SKU's read-model document for the first time.</summary>
     Task UpsertAsync(ProductReadModel readModel, CancellationToken cancellationToken);

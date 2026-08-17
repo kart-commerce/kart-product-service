@@ -19,6 +19,8 @@ public sealed class ProductReadModel
 
     public string? Brand { get; set; }
 
+    public string ImageUrl { get; set; } = string.Empty;
+
     public required decimal PriceAmount { get; set; }
 
     public required string PriceCurrency { get; set; }

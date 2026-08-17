@@ -2,10 +2,11 @@ using Kart.Product.Application.Common.Exceptions;
 using Kart.Product.Application.Common.Interfaces;
 using Kart.Product.Application.Common.Models;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace Kart.Product.Application.Features.GetProduct;
 
-public sealed class GetProductQueryHandler(IProductCache cache, IProductReadModelRepository readModelRepository)
+public sealed class GetProductQueryHandler(IProductCache cache, IProductReadModelRepository readModelRepository, ILogger<GetProductQueryHandler> logger)
     : IRequestHandler<GetProductQuery, ProductResponseDto>
 {
     public async Task<ProductResponseDto> Handle(GetProductQuery request, CancellationToken cancellationToken)
@@ -16,8 +17,12 @@ public sealed class GetProductQueryHandler(IProductCache cache, IProductReadMode
         var readModel = await cache.GetAsync(request.Sku, cancellationToken);
         if (readModel is null)
         {
-            readModel = await readModelRepository.GetBySkuAsync(request.Sku, cancellationToken)
-                ?? throw new VariantNotFoundException(request.Sku);
+            readModel = await readModelRepository.GetBySkuAsync(request.Sku, cancellationToken);
+            if (readModel is null)
+            {
+                logger.LogWarning("Stage {Stage}: product detail request rejected, sku {Sku} not found", "ProductNotFound", request.Sku);
+                throw new VariantNotFoundException(request.Sku);
+            }
 
             await cache.SetAsync(readModel, cancellationToken);
         }
@@ -33,6 +38,7 @@ public sealed class GetProductQueryHandler(IProductCache cache, IProductReadMode
             new ProductResponseAttributesDto(readModel.Size, readModel.Color, readModel.ExtendedAttributes),
             new ProductResponseRatingSummaryDto(readModel.RatingSummary.Avg, readModel.RatingSummary.Count),
             readModel.LastUpdatedAt,
-            readModel.ProductGroupId);
+            readModel.ProductGroupId,
+            readModel.ImageUrl);
     }
 }

@@ -24,32 +24,46 @@ public sealed class UpdateVariantCommandHandler(
         var providedCount = new[] { request.Price is not null, request.Status is not null, request.Attributes is not null }.Count(x => x);
         if (providedCount > 1)
         {
+            logger.LogWarning("Stage {Stage}: update rejected for sku {Sku}, exactly one of price/status/attributes may be provided per call", "MixedUpdateRequestRejected", request.Sku);
             throw new MixedUpdateRequestException("Exactly one of price, status, or attributes may be provided per call.");
         }
 
-        var variant = await variantRepository.GetBySkuAsync(request.Sku, cancellationToken)
-            ?? throw new VariantNotFoundException(request.Sku);
+        var variant = await variantRepository.GetBySkuAsync(request.Sku, cancellationToken);
+        if (variant is null)
+        {
+            logger.LogWarning("Stage {Stage}: update rejected, variant {Sku} not found", "VariantNotFound", request.Sku);
+            throw new VariantNotFoundException(request.Sku);
+        }
 
-        var productGroup = await productGroupRepository.GetByIdAsync(variant.ProductGroupId, cancellationToken)
-            ?? throw new ProductGroupNotFoundException(variant.ProductGroupId);
+        var productGroup = await productGroupRepository.GetByIdAsync(variant.ProductGroupId, cancellationToken);
+        if (productGroup is null)
+        {
+            logger.LogWarning("Stage {Stage}: update rejected for sku {Sku}, product-group {ProductGroupId} not found", "ProductGroupNotFound", request.Sku, variant.ProductGroupId);
+            throw new ProductGroupNotFoundException(variant.ProductGroupId);
+        }
 
         var now = timeProvider.GetUtcNow();
         var clientId = currentPrincipal.ClientId;
 
         IDomainEvent domainEvent;
 
+        // Price/status/attributes are three meaningfully different code paths - each fires its
+        // own event type.
         if (request.Price is not null)
         {
+            logger.LogInformation("Stage {Stage}: sku {Sku} update branch resolved to {Branch}", "PriceChangeBranch", variant.Sku, "PriceChange");
             var oldPrice = variant.ChangePrice(request.Price, clientId, now);
             domainEvent = new ProductPriceChangedDomainEvent(variant.Sku, oldPrice, request.Price, now);
         }
         else if (request.Status is not null)
         {
+            logger.LogInformation("Stage {Stage}: sku {Sku} update branch resolved to {Branch}", "DiscontinueBranch", variant.Sku, "Discontinue");
             variant.Discontinue(clientId, now);
             domainEvent = new ProductDiscontinuedDomainEvent(variant.Sku, now);
         }
         else
         {
+            logger.LogInformation("Stage {Stage}: sku {Sku} update branch resolved to {Branch}", "AttributesEditBranch", variant.Sku, "AttributesEdit");
             variant.UpdateAttributes(request.Attributes!, clientId, now);
             domainEvent = new ProductUpdatedDomainEvent(
                 variant.Sku,
@@ -60,22 +74,18 @@ public sealed class UpdateVariantCommandHandler(
                 productGroup.Brand,
                 variant.Status.ToString(),
                 variant.Attributes,
-                now);
+                now,
+                productGroup.ImageUrl);
         }
 
         outboxEventWriter.Enqueue(variant.Sku, domainEvent, clientId);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
-            "Stage {Stage}: variant {Sku} persisted ({EventType})",
+            "Stage {Stage}: variant {Sku} persisted ({EventType}), outbox event enqueued",
             "ProductPersistedToDatabase",
             variant.Sku,
             domainEvent.GetType().Name);
-        logger.LogInformation(
-            "Stage {Stage}: {EventType} outbox event saved for sku {Sku}",
-            "ProductOutboxEventSaved",
-            domainEvent.GetType().Name,
-            variant.Sku);
 
         // Write-through the new price into the cache synchronously with the Postgres commit
         // above (design-decisions.md, "Caching Strategy for Product Reads") - closes the
@@ -96,6 +106,12 @@ public sealed class UpdateVariantCommandHandler(
             ? new ProductResponseRatingSummaryDto(0, 0)
             : new ProductResponseRatingSummaryDto(existingReadModel.RatingSummary.Avg, existingReadModel.RatingSummary.Count);
 
+        logger.LogInformation(
+            "Stage {Stage}: sku {Sku} update completed ({EventType})",
+            "UpdateVariantProcessCompletedSuccessfully",
+            variant.Sku,
+            domainEvent.GetType().Name);
+
         return new ProductResponseDto(
             variant.Sku,
             productGroup.Name,
@@ -107,6 +123,7 @@ public sealed class UpdateVariantCommandHandler(
             new ProductResponseAttributesDto(variant.Size, variant.Color, variant.ExtendedAttributes),
             ratingSummary,
             now,
-            variant.ProductGroupId);
+            variant.ProductGroupId,
+            productGroup.ImageUrl);
     }
 }
