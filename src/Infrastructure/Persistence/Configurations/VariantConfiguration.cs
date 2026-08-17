@@ -14,7 +14,9 @@ public sealed class VariantConfiguration : IEntityTypeConfiguration<Variant>
         builder.ToTable("variants", t => t.HasCheckConstraint("CK_variants_status", "status IN ('Active', 'Discontinued')"));
 
         builder.HasKey(v => v.Sku);
-        builder.Property(v => v.Sku).HasColumnName("sku");
+        builder.Property(v => v.Sku)
+            .HasColumnName("sku")
+            .HasConversion(sku => sku.Value, value => Sku.From(value));
 
         builder.Property(v => v.ProductGroupId).HasColumnName("product_group_id").IsRequired();
 

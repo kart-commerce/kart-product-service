@@ -21,7 +21,7 @@ public sealed class ProductGroup : AggregateRoot
 
     /// <summary>Every product must have a real photo (BRD "no product without a real image") -
     /// required at creation, unlike Description/Brand.</summary>
-    public string ImageUrl { get; private set; } = string.Empty;
+    public ImageUrl ImageUrl { get; private set; }
 
     public ProductGroupStatus Status { get; private set; }
 
@@ -65,7 +65,7 @@ public sealed class ProductGroup : AggregateRoot
             Description = description,
             CategoryId = categoryId,
             Brand = brand,
-            ImageUrl = string.IsNullOrWhiteSpace(imageUrl) ? DefaultImageUrl(id) : imageUrl,
+            ImageUrl = string.IsNullOrWhiteSpace(imageUrl) ? DefaultImageUrl(id) : ProductGroups.ImageUrl.Create(imageUrl),
             Status = ProductGroupStatus.Draft,
             CreatedAt = now,
             UpdatedAt = now,
@@ -77,7 +77,7 @@ public sealed class ProductGroup : AggregateRoot
     /// <summary>Every product must have a real, loadable photo - a deterministic real stock
     /// photo keyed by this product's own id, so the invariant holds even for a caller that never
     /// supplies one (e.g. an existing integration unaware of this field).</summary>
-    private static string DefaultImageUrl(Guid id) => $"https://picsum.photos/seed/{id}/640/640";
+    private static ImageUrl DefaultImageUrl(Guid id) => ImageUrl.Create($"https://picsum.photos/seed/{id}/640/640");
 
     public void Publish(string updatedBy, DateTimeOffset now)
     {
@@ -134,7 +134,7 @@ public sealed class ProductGroup : AggregateRoot
 
         if (imageUrl is not null && imageUrl != ImageUrl)
         {
-            ImageUrl = imageUrl;
+            ImageUrl = ProductGroups.ImageUrl.Create(imageUrl);
             changed.Add("imageUrl");
         }
 

@@ -23,6 +23,12 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddProductAuthentication();
 
 builder.Services.AddKartErrorHandling(options => options
+    // Value Object construction (Money/Sku/ImageUrl/ProductGroupId - see the Domain project's
+    // primitive-obsession review) throws ArgumentException for a caller-supplied value that
+    // fails its invariants. Some of these VOs are constructed by a controller before the
+    // MediatR ValidationBehaviour pipeline stage ever runs, so without this mapping a bad value
+    // would fall through to the generic 500 below instead of a client-facing 400.
+    .Map<ArgumentException>(StatusCodes.Status400BadRequest, "INVALID_INPUT")
     .Map<SkuAlreadyExistsException>(StatusCodes.Status409Conflict, "SKU_ALREADY_EXISTS")
     .Map<ProductGroupNotFoundException>(StatusCodes.Status404NotFound, "PRODUCT_GROUP_NOT_FOUND")
     .Map<VariantNotFoundException>(StatusCodes.Status404NotFound, "VARIANT_NOT_FOUND")

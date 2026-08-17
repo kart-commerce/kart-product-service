@@ -18,7 +18,11 @@ public sealed class ProductGroupConfiguration : IEntityTypeConfiguration<Product
         builder.Property(p => p.Description).HasColumnName("description");
         builder.Property(p => p.CategoryId).HasColumnName("category_id").IsRequired();
         builder.Property(p => p.Brand).HasColumnName("brand");
-        builder.Property(p => p.ImageUrl).HasColumnName("image_url").IsRequired();
+
+        builder.Property(p => p.ImageUrl)
+            .HasColumnName("image_url")
+            .HasConversion(imageUrl => imageUrl.Value, value => ImageUrl.Create(value))
+            .IsRequired();
 
         builder.Property(p => p.Status)
             .HasColumnName("status")

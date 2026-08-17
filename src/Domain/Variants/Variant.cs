@@ -12,8 +12,15 @@ namespace Kart.Product.Domain.Variants;
 /// </summary>
 public sealed class Variant
 {
-    public string Sku { get; private set; } = string.Empty;
+    public Sku Sku { get; private set; }
 
+    /// <summary>Guid, not a strongly typed id: it must stay comparable, at the EF Core
+    /// relationship level, to <see cref="ProductGroups.ProductGroup"/>.Id, which is itself
+    /// Guid - inherited from the shared, cross-service <c>AggregateRoot</c> base, which is out
+    /// of this service's scope alone to retype (see the accompanying primitive-obsession
+    /// review). A wrapped id here without one there is a real EF Core limitation, not a style
+    /// choice: EF Core requires a foreign key's CLR type to match its principal key's CLR type,
+    /// value converters notwithstanding.</summary>
     public Guid ProductGroupId { get; private set; }
 
     public Money Price { get; private set; } = null!;
@@ -42,15 +49,13 @@ public sealed class Variant
     }
 
     public static Variant Create(
-        string sku,
+        Sku sku,
         Guid productGroupId,
         Money price,
         ProductAttributes attributes,
         string createdBy,
         DateTimeOffset now)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(sku);
-
         return new Variant
         {
             Sku = sku,
